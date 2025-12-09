@@ -14,15 +14,9 @@ static iv2 iv2m(s32 x, s32 y)    { return (iv2){{x, y}}; }
 
 typedef struct {
   iv2 tilemap_coords; // which tilemap
-  v2 tile_coords; // which tile (+fractional part)
-} Raw_Position;
-
-typedef struct {
-  iv2 tilemap_coords; // which tilemap
   iv2 tile_coords; // which tile
   v2 tile_rel_coords; // sub-tile position (fractional)
 } Canonical_Position;
-
 
 typedef struct {
   u32 *tiles;
@@ -30,8 +24,8 @@ typedef struct {
 
 typedef struct {
   iv2 tilemap_count; // How many tilemaps are available
-  iv2 tile_dim_meters; // How big each tile in the map is in meters 
-  iv2 tile_dim_px; // How big each tile in the map is in px
+  v2 tile_dim_meters; // How big each tile in the map is in meters 
+  v2 tile_dim_px; // How big each tile in the map is in px
   iv2 tile_count; // how many tiles in each axis
 
   Tile_Map *maps;
@@ -49,10 +43,10 @@ typedef struct {
   R2D_Cmd_Chunk_List cmd_list;
 
   // Game specific stuff
-  v2 player_pos; // player position.. hm..?
-  v2 player_dim; // player dimensions
-  iv2 player_tilemap; // active tilemap
+  v2 player_dim_meters; // player dimensions (in pixels or???)
   World world;
+
+  Canonical_Position pp;
   
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;

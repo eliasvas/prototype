@@ -33,8 +33,8 @@ void game_push_atlas_rect_at(Game_State *gs, u32 atlas_idx, v2 pos) {
 
 u32 get_tilemap_value_nocheck(World *world, Tile_Map *tm, iv2 tile_coords) {
   assert(tm);
-  assert((tile_coords.x >= 0) && (tile_coords.x < world->tile_dim_px.x) &&
-        (tile_coords.y >= 0) && (tile_coords.y < world->tile_dim_px.y));
+  assert((tile_coords.x >= 0) && (tile_coords.x < world->tile_count.x) &&
+        (tile_coords.y >= 0) && (tile_coords.y < world->tile_count.y));
 
   return tm->tiles[tile_coords.x + world->tile_count.x*tile_coords.y];
 }
@@ -60,13 +60,48 @@ b32 is_tilemap_point_empty(World *world, Tile_Map *tm, v2 test_point) {
 
 Tile_Map *get_tilemap(World *world, iv2 tilemap_idx) {
   Tile_Map *tm = nullptr;
-  if ((tilemap_idx.x >= 0) && (tilemap_idx.x < world->tile_dim_px.x) &&
-        (tilemap_idx.y >= 0) && (tilemap_idx.x < world->tile_dim_px.y)) {
+  if ((tilemap_idx.x >= 0) && (tilemap_idx.x < world->tilemap_count.x) &&
+        (tilemap_idx.y >= 0) && (tilemap_idx.x < world->tilemap_count.y)) {
     tm = &world->maps[tilemap_idx.x + world->tilemap_count.x * tilemap_idx.y];
   }
   return tm;
 }
 
+Canonical_Position canonicalize_position(World *world, Canonical_Position can_pos) {
+  Canonical_Position p = can_pos;
+
+  // For x-axis
+  f32 tile_rel_x = can_pos.tile_rel_coords.x;
+  s32 tile_offset_x = floor_f32((f32)tile_rel_x / world->tile_dim_meters.x);
+  p.tile_coords.x += tile_offset_x;
+  p.tile_rel_coords.x = tile_rel_x - world->tile_dim_meters.x * tile_offset_x;
+  if (p.tile_coords.x >= world->tile_count.x) {
+    p.tilemap_coords.x += 1;
+    p.tile_coords.x = 0;
+  }
+  if (p.tile_coords.x < 0) {
+    p.tilemap_coords.x -= 1;
+    p.tile_coords.x = world->tile_count.x-1;
+  }
+
+  // For y-axis
+  f32 tile_rel_y = can_pos.tile_rel_coords.y;
+  s32 tile_offset_y = floor_f32((f32)tile_rel_y / world->tile_dim_meters.y);
+  p.tile_coords.y += tile_offset_y;
+  p.tile_rel_coords.y = tile_rel_y - world->tile_dim_meters.y * tile_offset_y;
+  if (p.tile_coords.y >= world->tile_count.y) {
+    p.tilemap_coords.y += 1;
+    p.tile_coords.y = 0;
+  }
+  if (p.tile_coords.y < 0) {
+    p.tilemap_coords.y -= 1;
+    p.tile_coords.y = world->tile_count.y-1;
+  }
+
+  return p;
+}
+
+/*
 Canonical_Position get_canonical_position(World *world, Raw_Position pos) {
   Canonical_Position cpos = {};
 
@@ -78,30 +113,14 @@ Canonical_Position get_canonical_position(World *world, Raw_Position pos) {
 
   // Transitions happen here
   cpos.tilemap_coords = pos.tilemap_coords;
-  if (cpos.tile_coords.x >= world->tile_count.x) {
-    cpos.tilemap_coords.x += 1;
-    cpos.tile_coords.x = 0;
-  }
-  if (cpos.tile_coords.x < 0) {
-    cpos.tilemap_coords.x -= 1;
-    cpos.tile_coords.x = world->tile_count.x-1;
-  }
-  if (cpos.tile_coords.y >= world->tile_count.y) {
-    cpos.tilemap_coords.y += 1;
-    cpos.tile_coords.y = 0;
-  }
-  if (cpos.tile_coords.y < 0) {
-    cpos.tilemap_coords.y -= 1;
-    cpos.tile_coords.y = world->tile_count.y-1;
-  }
-
   return cpos;
 }
+*/
 
-b32 is_world_point_empty(World *world, Raw_Position pos) {
+b32 is_world_point_empty(World *world, Canonical_Position pos) {
   b32 empty = false;
 
-  Canonical_Position cpos = get_canonical_position(world, pos);
+  Canonical_Position cpos = canonicalize_position(world, pos);
   Tile_Map *tm = get_tilemap(world, cpos.tilemap_coords);
   empty = is_tilemap_point_empty(world, tm, v2m(cpos.tile_coords.x, cpos.tile_coords.y));
 
@@ -153,7 +172,8 @@ void game_init(Game_State *gs) {
 
   gs->world = (World) {
     .tilemap_count = iv2m(2,2),
-    .tile_dim_px = iv2m(8,8),
+    .tile_dim_px = v2m(8,8),
+    .tile_dim_meters = v2m(1.5,1.5),
     .tile_count = iv2m(8,6),
     .maps = (Tile_Map*)maps,
   };
@@ -165,14 +185,21 @@ void game_init(Game_State *gs) {
 
 
   // Initialize the player
-  gs->player_pos = v2m(5*TILE_W,3*TILE_H);
-  gs->player_dim = v2m(TILE_W*0.9,TILE_H*0.9);
-  gs->player_tilemap = iv2m(0,0);
+  gs->pp = (Canonical_Position){
+    .tilemap_coords = iv2m(0,0),
+    .tile_coords = iv2m(3,3),
+    .tile_rel_coords = v2m(0,0),
+  };
+  gs->player_dim_meters = v2_multf(gs->world.tile_dim_meters, 0.75);
 }
 
 void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->screen_dim.x, gs->screen_dim.y);
+
+  //printf("hero tile coords: %d %d\n", gs->pp.tile_coords.x, gs->pp.tile_coords.y);
+  //printf("hero tile rel coords: %f %f\n", gs->pp.tile_rel_coords.x, gs->pp.tile_rel_coords.y);
 }
+
 
 void game_render(Game_State *gs, float dt) {
   // Push viewport, scissor and camera (we will not change these the whole frame except in UI pass)
@@ -184,7 +211,7 @@ void game_render(Game_State *gs, float dt) {
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
-  Tile_Map *tm = get_tilemap(&gs->world, gs->player_tilemap);
+  Tile_Map *tm = get_tilemap(&gs->world, gs->pp.tilemap_coords);
 
   // Draw The backgound
   for (u32 row = 0; row < 6; row+=1) {
@@ -198,36 +225,50 @@ void game_render(Game_State *gs, float dt) {
   }
 
   // Move + Draw the hero
-  v2 new_player_pos = gs->player_pos;
-  f32 hero_speed = 100.0;
+  v2 new_player_pos = v2m(gs->pp.tile_rel_coords.x, gs->pp.tile_rel_coords.y);
+  f32 hero_speed = 15.0;
   if (input_key_down(&gs->input, KEY_SCANCODE_UP))new_player_pos.y-=hero_speed*dt;
   if (input_key_down(&gs->input, KEY_SCANCODE_DOWN))new_player_pos.y+=hero_speed*dt;
   if (input_key_down(&gs->input, KEY_SCANCODE_LEFT))new_player_pos.x-=hero_speed*dt;
   if (input_key_down(&gs->input, KEY_SCANCODE_RIGHT))new_player_pos.x+=hero_speed*dt;
 
+  Canonical_Position new_player_cpos = gs->pp;
+  new_player_cpos.tile_rel_coords = new_player_pos;
 
-  Raw_Position player_pos = {
-    .tilemap_coords = gs->player_tilemap,
-    .tile_coords = v2_divf(v2_add(new_player_pos, v2m(0, gs->player_dim.y/2)), TILE_W),
-  };
-  Raw_Position player_pos_left = player_pos;
-  player_pos_left.tile_coords.x -= (gs->player_dim.x/2) / TILE_W;
-  Raw_Position player_pos_right = player_pos;
-  player_pos_right.tile_coords.x += (gs->player_dim.x/2) / TILE_W;
+  Canonical_Position new_player_cpos_left = new_player_cpos;
+  // we subtract pixels here!!
+  new_player_cpos_left.tile_rel_coords.x -= gs->player_dim_meters.x/2;
 
-  if (is_world_point_empty(&gs->world, player_pos) && 
-      is_world_point_empty(&gs->world, player_pos_left) &&
-      is_world_point_empty(&gs->world, player_pos_right)) {
-    Canonical_Position cpos = get_canonical_position(&gs->world, player_pos);
+  Canonical_Position new_player_cpos_right = new_player_cpos;
+  // we subtract pixels here!!
+  new_player_cpos_right.tile_rel_coords.x += gs->player_dim_meters.x/2;
 
-    gs->player_tilemap = cpos.tilemap_coords;
 
-    gs->player_pos = v2_multf(v2_add(cpos.tile_rel_coords, v2m(cpos.tile_coords.x, cpos.tile_coords.y)), TILE_W);
-    gs->player_pos.y -= gs->player_dim.y/2; // because our playerpos is in the center..
-    //gs->player_pos = new_player_pos;
+  if (is_world_point_empty(&gs->world, new_player_cpos) && 
+      is_world_point_empty(&gs->world, new_player_cpos_left) &&
+      is_world_point_empty(&gs->world, new_player_cpos_right)) {
+    gs->pp = canonicalize_position(&gs->world, new_player_cpos);
   }
-  game_push_atlas_rect(gs, 9, rec(gs->player_pos.x - gs->player_dim.x/2, gs->player_pos.y - gs->player_dim.y/2, gs->player_dim.x, gs->player_dim.y));
 
+  // to also draw the current tile, mainly for debugging
+#if 1
+  game_push_atlas_rect(gs, 16*6+2, 
+      rec( gs->pp.tile_coords.x*TILE_W,
+        gs->pp.tile_coords.y*TILE_H,
+        TILE_W,
+        TILE_H
+      )
+  );
+#endif
+
+  v2 m2p = v2_div(gs->world.tile_dim_px, gs->world.tile_dim_meters);
+  game_push_atlas_rect(gs, 9, 
+      rec( gs->pp.tile_coords.x*TILE_W + m2p.x*gs->pp.tile_rel_coords.x - m2p.x*gs->player_dim_meters.x/2,
+        gs->pp.tile_coords.y*TILE_H + m2p.y*gs->pp.tile_rel_coords.y - m2p.y*gs->player_dim_meters.y,
+        m2p.x*gs->player_dim_meters.x,
+        m2p.y*gs->player_dim_meters.y
+      )
+  );
 
   // ..
   // ..
