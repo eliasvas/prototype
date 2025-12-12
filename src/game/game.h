@@ -27,8 +27,9 @@ typedef struct {
   v2 tile_dim_meters; // How big each tile in the map is in meters 
   v2 tile_dim_px; // How big each tile in the map is in px
   iv2 tile_count; // how many tiles in each axis
-
   Tile_Map *maps;
+
+  v2 lower_left_corner;
 } World;
 
 typedef struct {
@@ -43,9 +44,9 @@ typedef struct {
   R2D_Cmd_Chunk_List cmd_list;
 
   // Game specific stuff
-  v2 player_dim_meters; // player dimensions (in pixels or???)
+  f32 zoom;
   World world;
-
+  v2 player_dim_meters; // player dimensions (in pixels or???)
   Canonical_Position pp;
   
   // Loaded Asset resources (TODO: Asset system)

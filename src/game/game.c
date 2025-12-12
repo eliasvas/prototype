@@ -6,27 +6,30 @@
 #define TILE_W 8
 #define TILE_H 8
 
-
 //-------------------------------------
 // draw.h ??
 #define ATLAS_SPRITES_X 16
 #define ATLAS_SPRITES_Y 10
+// Currently y-up right handed coord system,
+// Think about this, its probably what we want for world space transforms..
 void game_push_atlas_rect(Game_State *gs, u32 atlas_idx, rect r) {
   u32 xidx = (u32)atlas_idx % ATLAS_SPRITES_X;
   u32 yidx = (u32)atlas_idx / ATLAS_SPRITES_X;
+
+  // Calculate the y-up rect
+  v2 llc = v2_divf(gs->world.lower_left_corner,gs->zoom);
+  rect yup_rect = r;
+  yup_rect.y = llc.y - r.h - r.y;
+
   R2D_Quad quad = (R2D_Quad) {
       .src_rect = rec(xidx*TILE_W,yidx*TILE_H,TILE_W,TILE_H),
-      .dst_rect = r,
+      .dst_rect = yup_rect,
       .c = col(1,1,1,1),
       .tex = gs->atlas,
       .rot_deg = 0,
   };
   R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-}
-
-void game_push_atlas_rect_at(Game_State *gs, u32 atlas_idx, v2 pos) {
-  game_push_atlas_rect(gs, atlas_idx, rec(pos.x-TILE_W/2,pos.y-TILE_H/2,TILE_W,TILE_H));
 }
 //-----------------------------------------------
 
@@ -191,10 +194,12 @@ void game_init(Game_State *gs) {
     .tile_rel_coords = v2m(0,0),
   };
   gs->player_dim_meters = v2_multf(gs->world.tile_dim_meters, 0.75);
+  gs->zoom = 10.0;
 }
 
 void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->screen_dim.x, gs->screen_dim.y);
+  gs->world.lower_left_corner = v2m(0, gs->screen_dim.y);
 
   //printf("hero tile coords: %d %d\n", gs->pp.tile_coords.x, gs->pp.tile_coords.y);
   //printf("hero tile rel coords: %f %f\n", gs->pp.tile_rel_coords.x, gs->pp.tile_rel_coords.y);
@@ -207,8 +212,8 @@ void game_render(Game_State *gs, float dt) {
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-  //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
-  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 10.0, .rot_deg = 0} };
+  //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
+  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
   Tile_Map *tm = get_tilemap(&gs->world, gs->pp.tilemap_coords);
@@ -227,8 +232,8 @@ void game_render(Game_State *gs, float dt) {
   // Move + Draw the hero
   v2 new_player_pos = v2m(gs->pp.tile_rel_coords.x, gs->pp.tile_rel_coords.y);
   f32 hero_speed = 15.0;
-  if (input_key_down(&gs->input, KEY_SCANCODE_UP))new_player_pos.y-=hero_speed*dt;
-  if (input_key_down(&gs->input, KEY_SCANCODE_DOWN))new_player_pos.y+=hero_speed*dt;
+  if (input_key_down(&gs->input, KEY_SCANCODE_UP))new_player_pos.y+=hero_speed*dt;
+  if (input_key_down(&gs->input, KEY_SCANCODE_DOWN))new_player_pos.y-=hero_speed*dt;
   if (input_key_down(&gs->input, KEY_SCANCODE_LEFT))new_player_pos.x-=hero_speed*dt;
   if (input_key_down(&gs->input, KEY_SCANCODE_RIGHT))new_player_pos.x+=hero_speed*dt;
 
@@ -264,7 +269,7 @@ void game_render(Game_State *gs, float dt) {
   v2 m2p = v2_div(gs->world.tile_dim_px, gs->world.tile_dim_meters);
   game_push_atlas_rect(gs, 9, 
       rec( gs->pp.tile_coords.x*TILE_W + m2p.x*gs->pp.tile_rel_coords.x - m2p.x*gs->player_dim_meters.x/2,
-        gs->pp.tile_coords.y*TILE_H + m2p.y*gs->pp.tile_rel_coords.y - m2p.y*gs->player_dim_meters.y,
+        gs->pp.tile_coords.y*TILE_H + m2p.y*gs->pp.tile_rel_coords.y,
         m2p.x*gs->player_dim_meters.x,
         m2p.y*gs->player_dim_meters.y
       )
