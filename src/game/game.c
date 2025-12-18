@@ -203,6 +203,30 @@ void game_update(Game_State *gs, float dt) {
 
   //printf("hero tile coords: %d %d\n", gs->pp.tile_coords.x, gs->pp.tile_coords.y);
   //printf("hero tile rel coords: %f %f\n", gs->pp.tile_rel_coords.x, gs->pp.tile_rel_coords.y);
+
+
+  // Audio test
+  u32 sample_rate = 44100; 
+  u32 num_seconds = 4;
+  u32 num_channels = 2;
+
+  u32 num_samples = sample_rate * num_channels * num_seconds;
+  s32* wdata = arena_push_array(gs->frame_arena, s32, num_samples);
+
+  s32 sample_value1 = 0;
+  s32 sample_value2 = 0;
+  for (u32 i = 0; i < num_samples; i+=2) {
+    sample_value1 += 8000000;
+    sample_value2 += 1200000;
+    wdata[i] = sample_value1;
+    wdata[i+1] = sample_value2;
+  }
+
+  assert(write_sample_wav_file("build/hello.wav", wdata, num_samples * sizeof(wdata[0]),
+        num_channels, sample_rate, sizeof(wdata[0])*8)); 
+  // ------------------
+
+
 }
 
 

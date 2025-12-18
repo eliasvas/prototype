@@ -8,5 +8,6 @@
 #include "effects.h"
 #include "font_util.h"
 #include "json_util.h"
+#include "audio_util.h"
 
 #endif
