@@ -2,6 +2,14 @@
 #define AUDIO_UTIL_H__
 #include "base/base_inc.h"
 
+// Some references for when I ACTUALLY wanna do audio
+// https://blog.demofox.org/2012/05/14/diy-synthesizer-chapter-1-sound-output/
+// https://lisyarus.github.io/blog/posts/audio-mixing.html
+// https://www.youtube.com/watch?v=udbA7u1zYfc (WAV spec)
+
+// TODO: WAV loading
+// TODO: Audio subsystem (based on SDL_Audio ok?)
+
 typedef struct {
   // RIFF chunk
   u8 chunk_id[4];

@@ -33,6 +33,16 @@ typedef struct {
 } World;
 
 typedef struct {
+  s32 current_sine_sample; // not needed
+  s32 sample_rate;
+  s32 channel_count;
+
+  // Game must fill these every frame (!!)
+  f32 *samples;
+  u64 samples_requested;
+} Game_Audio_Output_Buffer;
+
+typedef struct {
   Arena *persistent_arena; // For persistent allocations
   Arena *frame_arena; // For per-frame allocations
   rect game_viewport;
@@ -42,6 +52,7 @@ typedef struct {
   v2 screen_dim;
   Input input;
   R2D_Cmd_Chunk_List cmd_list;
+  Game_Audio_Output_Buffer audio_out;
 
   // Game specific stuff
   f32 zoom;

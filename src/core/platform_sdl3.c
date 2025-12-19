@@ -55,8 +55,19 @@ Platform_Image_Data platform_load_image_bytes_as_rgba(const char *filepath) {
 }
 
 typedef struct {
+  SDL_AudioStream *stream;
+  SDL_AudioFormat format;
+
+  s32 current_sine_sample; // not needed
+  s32 sample_rate;
+  s32 channel_count;
+}SDL_Audio_Output_Buffer;
+
+typedef struct {
   SDL_Window *window;
   SDL_GLContext context;
+
+  SDL_Audio_Output_Buffer audio_output;
 
   f64 dt;
   u64 frame_start;
@@ -176,6 +187,35 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   sdl_state->gs.persistent_arena = arena_make(GB(1));
   sdl_state->gs.frame_arena = arena_make(MB(256));
   sdl_state->gs.screen_dim = v2m(DEFAULT_WIN_DIM_X, DEFAULT_WIN_DIM_Y);
+
+  // @Initialize the Audio output buffer..
+  sdl_state->audio_output = (SDL_Audio_Output_Buffer) {
+    .stream = nullptr,
+    .current_sine_sample = 0,
+    .channel_count = 1,
+    .format = SDL_AUDIO_F32,
+    .sample_rate = 8000, // Hz
+  };
+  SDL_AudioSpec spec = (SDL_AudioSpec) {
+    .channels = sdl_state->audio_output.channel_count,
+    .format = sdl_state->audio_output.format,
+    .freq = sdl_state->audio_output.sample_rate,
+  };
+  sdl_state->audio_output.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+  if (sdl_state->audio_output.stream == nullptr) {
+    SDL_Log("Audio stream creation Failed");
+    return SDL_APP_FAILURE;
+  }
+  SDL_ResumeAudioStreamDevice(sdl_state->audio_output.stream);
+  sdl_state->gs.audio_out = (Game_Audio_Output_Buffer) {
+    .sample_rate = sdl_state->audio_output.sample_rate,
+    .current_sine_sample= sdl_state->audio_output.current_sine_sample,
+    .channel_count = sdl_state->audio_output.channel_count,
+    // not really needed..
+    .samples = nullptr,
+    .samples_requested = 0,
+  };
+
   r2d_clear_cmds(&sdl_state->gs.cmd_list);
 
   // IMPORTANT:
@@ -266,6 +306,21 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   ogl_clear(col(0.0,0.0,0.0,1.0));
   sdl_state->gs.time_sec = platform_get_time();
 
+  // Allocate needed audio samples for game to fill
+  // Note: Currently we only output samples when there is less than a second of samples remaining, which is a gigantic delay..
+  u64 samples_for_half_second = sdl_state->audio_output.sample_rate * sdl_state->audio_output.channel_count / 2;
+  u64 queued_samples_count = SDL_GetAudioStreamQueued(sdl_state->audio_output.stream);
+  f32 *samples_to_write = nullptr;
+  u64 needed_samples = 0;
+  if (queued_samples_count < samples_for_half_second) {
+    u64 SAMPLE_COUNT = 512;
+    samples_to_write = arena_push_array(sdl_state->gs.frame_arena, f32, SAMPLE_COUNT);
+    needed_samples = SAMPLE_COUNT;
+  }
+  sdl_state->gs.audio_out.samples_requested = needed_samples;
+  sdl_state->gs.audio_out.samples = samples_to_write;
+
+  // Do actual game's update and render
   game_api.update(&sdl_state->gs, sdl_state->dt);
   game_api.render(&sdl_state->gs, sdl_state->dt);
 
@@ -277,7 +332,12 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     TIME_BLOCK("Swap Window");
     SDL_GL_SwapWindow(sdl_state->window);
   }
- 
+
+  // Actually put the samples..
+  if (queued_samples_count < samples_for_half_second) {
+    sdl_state->audio_output.current_sine_sample = sdl_state->gs.audio_out.current_sine_sample;
+    SDL_PutAudioStreamData(sdl_state->audio_output.stream, &samples_to_write[0], sizeof(f32) * needed_samples);
+  }
 
 #if !(ARCH_WASM64 || ARCH_WASM32)
   // Perform a reload if necessary

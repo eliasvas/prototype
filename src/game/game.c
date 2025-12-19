@@ -226,6 +226,18 @@ void game_update(Game_State *gs, float dt) {
         num_channels, sample_rate, sizeof(wdata[0])*8)); 
   // ------------------
 
+  // Another audio test -- real time (!!)
+  // TODO: This is enough backend to make an audio mixer - do it
+  u64 audio_samples_req = gs->audio_out.samples_requested;
+  if (audio_samples_req > 0) {
+    f32 volume_mod = 0.01;
+    for (u32 sample_idx = 0; sample_idx < audio_samples_req; sample_idx+=1) {
+      f32 freq = 400; // Hz
+      f32 s = sin_f32(2 * PI * (freq/gs->audio_out.sample_rate) * gs->audio_out.current_sine_sample);
+      gs->audio_out.samples[sample_idx] = s * volume_mod;
+      gs->audio_out.current_sine_sample += 1;
+    }
+  }
 
 }
 
