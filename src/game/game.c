@@ -77,13 +77,13 @@ world_pos canonicalize_position(World *world, world_pos can_pos) {
 
   // For x-axis
   f32 tile_rel_x = can_pos.tile_rel_coords.x;
-  s32 tile_offset_x = floor_f32((f32)tile_rel_x / world->tile_dim_meters.x);
+  s32 tile_offset_x = round_f32((f32)tile_rel_x / world->tile_dim_meters.x);
   p.abs_tile_coords.x += tile_offset_x;
   p.tile_rel_coords.x = tile_rel_x - world->tile_dim_meters.x * tile_offset_x;
 
   // For y-axis
   f32 tile_rel_y = can_pos.tile_rel_coords.y;
-  s32 tile_offset_y = floor_f32((f32)tile_rel_y / world->tile_dim_meters.y);
+  s32 tile_offset_y = round_f32((f32)tile_rel_y / world->tile_dim_meters.y);
   p.abs_tile_coords.y += tile_offset_y;
   p.tile_rel_coords.y = tile_rel_y - world->tile_dim_meters.y * tile_offset_y;
 
@@ -214,18 +214,21 @@ void game_render(Game_State *gs, float dt) {
   // For Now at least chunk is always the [0][0] - lets asasert that
   assert(UINT_FROM_PTR(chunk) == UINT_FROM_PTR(gs->world.chunks));
 
+  // TODO: Make it eactly half of screen?
   iv2 screen_offset = iv2m(-4,-3);
   iv2 hero_offset = get_chunk_pos(&gs->world, gs->pp.abs_tile_coords).chunk_rel;
   hero_offset.x += screen_offset.x;
   hero_offset.y += screen_offset.y;
 
+  v2 m2p = v2_div(gs->world.tile_dim_px, gs->world.tile_dim_meters);
+
   // Draw The backgound
   for (u32 row = 0; row < 6; row+=1) {
     for (u32 col = 0; col < 8; col+=1) {
-      if (is_tile_chunk_tile_empty(&gs->world, chunk, v2m(col+hero_offset.x, row+hero_offset.y))) {
-        game_push_atlas_rect(gs, 69, rec(col*TILE_W, row*TILE_H,TILE_W,TILE_H));
+      if (is_tile_chunk_tile_empty(&gs->world, chunk, v2m(col+hero_offset.x , row+hero_offset.y))) {
+        game_push_atlas_rect(gs, 69, rec(col*TILE_W - m2p.x*gs->pp.tile_rel_coords.x, row*TILE_H - m2p.y*gs->pp.tile_rel_coords.y,TILE_W,TILE_H));
       } else {
-        game_push_atlas_rect(gs, 1, rec(col*TILE_W, row*TILE_H,TILE_W,TILE_H));
+        game_push_atlas_rect(gs, 1, rec(col*TILE_W - m2p.x*gs->pp.tile_rel_coords.x, row*TILE_H - m2p.y*gs->pp.tile_rel_coords.y,TILE_W,TILE_H));
       }
     }
   }
@@ -259,18 +262,17 @@ void game_render(Game_State *gs, float dt) {
   // to also draw the current tile, mainly for debugging
 #if 1
   game_push_atlas_rect(gs, 16*6+2, 
-      rec( -screen_offset.x*TILE_W,
-        -screen_offset.y*TILE_H,
+      rec( -screen_offset.x*TILE_W  - m2p.x*gs->pp.tile_rel_coords.x,
+        -screen_offset.y*TILE_H  - m2p.y*gs->pp.tile_rel_coords.y,
         TILE_W,
         TILE_H
       )
   );
 #endif
 
-  v2 m2p = v2_div(gs->world.tile_dim_px, gs->world.tile_dim_meters);
   game_push_atlas_rect(gs, 9, 
-      rec( -screen_offset.x*TILE_W + m2p.x*gs->pp.tile_rel_coords.x - m2p.x*gs->player_dim_meters.x/2,
-        -screen_offset.y*TILE_H + m2p.y*gs->pp.tile_rel_coords.y,
+      rec( -screen_offset.x*TILE_W + TILE_W/2 - m2p.x*gs->player_dim_meters.x/2,
+        -screen_offset.y*TILE_H + TILE_H/2,
         m2p.x*gs->player_dim_meters.x,
         m2p.y*gs->player_dim_meters.y
       )
