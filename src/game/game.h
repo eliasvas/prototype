@@ -3,45 +3,10 @@
 
 #include "base/base_inc.h"
 #include "core/core_inc.h"
-
-typedef union iv2 {
-    struct { s32 x,y; };
-    struct { s32 u,v; };
-    struct { s32 r,g; };
-    s32 raw[2];
-}iv2;
-static iv2 iv2m(s32 x, s32 y)    { return (iv2){{x, y}}; }
-
-// TODO: call tile_rel_coords offset?
-typedef struct {
-  iv2 abs_tile_coords; // which tile
-  v2 tile_rel_coords; // sub-tile position (fractional)
-} world_pos;
+#include "tile.h"
 
 typedef struct {
-  iv2 chunk_coords; // which 256x256 chunk (or rather which tile right?)
-  iv2 chunk_rel; // which tile inside the chunk
-} Tile_Chunk_Position;
-
-typedef struct {
-  u32 *tiles;
-} Tile_Chunk;
-
-// Absolute Tile Position (24 | 8) -> (Chunk | Offset)
-// meaning we can have 2^24 chunks and each chunk has 256 tiles
-
-typedef struct {
-  s32 chunk_dim; // How many tiles a chunk has - typically 256
-  iv2 tile_chunk_count;
-  u32 chunk_shift;
-  u32 chunk_mask;
-
-
-  v2 tile_dim_meters; // How big each tile in the map is in meters 
-  v2 tile_dim_px; // How big each tile in the map is in px
-  iv2 tile_count; // how many tiles in each axis
-  Tile_Chunk *chunks;
-
+  Tile_Map *tm;
   v2 lower_left_corner;
 } World;
 
@@ -71,7 +36,7 @@ typedef struct {
   f32 zoom;
   World world;
   v2 player_dim_meters; // player dimensions (in pixels or???)
-  world_pos pp;
+  Tile_Map_Position pp;
   
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;
