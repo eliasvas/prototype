@@ -34,98 +34,78 @@ void game_push_atlas_rect(Game_State *gs, u32 atlas_idx, rect r) {
 //-----------------------------------------------
 
 
-u32 get_tilemap_value_nocheck(World *world, Tile_Map *tm, iv2 tile_coords) {
-  assert(tm);
-  assert((tile_coords.x >= 0) && (tile_coords.x < world->tile_count.x) &&
-        (tile_coords.y >= 0) && (tile_coords.y < world->tile_count.y));
+u32 get_tile_chunk_value_nocheck(World *world, Tile_Chunk *chunk, iv2 tile_coords) {
+  assert(chunk);
+  assert((tile_coords.x >= 0) && (tile_coords.x < world->chunk_dim) &&
+        (tile_coords.y >= 0) && (tile_coords.y < world->chunk_dim));
 
-  return tm->tiles[tile_coords.x + world->tile_count.x*tile_coords.y];
+  return chunk->tiles[tile_coords.x + world->chunk_dim*tile_coords.y];
 }
 
-b32 is_tilemap_point_empty(World *world, Tile_Map *tm, v2 test_point) {
+// Implement get_tile_chunk_value where you pass the chunk and rel coords
+
+b32 is_tile_chunk_tile_empty(World *world, Tile_Chunk *chunk, v2 test_point) {
   b32 empty = false;
 
-  if (tm) {
+  if (chunk) {
     iv2 tile_pos = (iv2){
       .x = (s32)test_point.x,
       .y = (s32)test_point.y,
     };
 
-    if ((tile_pos.x >=0) && (tile_pos.x < world->tile_count.x) && 
-        (tile_pos.y >= 0) && (tile_pos.y < world->tile_count.y)) {
-      u32 tm_value = get_tilemap_value_nocheck(world, tm, tile_pos);
-      empty = (tm_value == 0);
+    if ((tile_pos.x >=0) && (tile_pos.x < world->chunk_dim) && 
+        (tile_pos.y >= 0) && (tile_pos.y < world->chunk_dim)) {
+      u32 chunk_value = get_tile_chunk_value_nocheck(world, chunk, tile_pos);
+      empty = (chunk_value == 0);
     } 
   }
 
   return empty;
 }
 
-Tile_Map *get_tilemap(World *world, iv2 tilemap_idx) {
-  Tile_Map *tm = nullptr;
-  if ((tilemap_idx.x >= 0) && (tilemap_idx.x < world->tilemap_count.x) &&
-        (tilemap_idx.y >= 0) && (tilemap_idx.x < world->tilemap_count.y)) {
-    tm = &world->maps[tilemap_idx.x + world->tilemap_count.x * tilemap_idx.y];
+Tile_Chunk *get_tile_chunk(World *world, iv2 chunk_coords) {
+  Tile_Chunk *chunk= nullptr;
+  if ((chunk_coords.x >= 0) && (chunk_coords.x < world->tile_chunk_count.x) &&
+        (chunk_coords.y >= 0) && (chunk_coords.x < world->tile_chunk_count.y)) {
+    chunk = &world->chunks[chunk_coords.x + world->chunk_dim * chunk_coords.y];
   }
-  return tm;
+  return chunk;
 }
 
-Canonical_Position canonicalize_position(World *world, Canonical_Position can_pos) {
-  Canonical_Position p = can_pos;
+world_pos canonicalize_position(World *world, world_pos can_pos) {
+  world_pos p = can_pos;
 
   // For x-axis
   f32 tile_rel_x = can_pos.tile_rel_coords.x;
   s32 tile_offset_x = floor_f32((f32)tile_rel_x / world->tile_dim_meters.x);
-  p.tile_coords.x += tile_offset_x;
+  p.abs_tile_coords.x += tile_offset_x;
   p.tile_rel_coords.x = tile_rel_x - world->tile_dim_meters.x * tile_offset_x;
-  if (p.tile_coords.x >= world->tile_count.x) {
-    p.tilemap_coords.x += 1;
-    p.tile_coords.x = 0;
-  }
-  if (p.tile_coords.x < 0) {
-    p.tilemap_coords.x -= 1;
-    p.tile_coords.x = world->tile_count.x-1;
-  }
 
   // For y-axis
   f32 tile_rel_y = can_pos.tile_rel_coords.y;
   s32 tile_offset_y = floor_f32((f32)tile_rel_y / world->tile_dim_meters.y);
-  p.tile_coords.y += tile_offset_y;
+  p.abs_tile_coords.y += tile_offset_y;
   p.tile_rel_coords.y = tile_rel_y - world->tile_dim_meters.y * tile_offset_y;
-  if (p.tile_coords.y >= world->tile_count.y) {
-    p.tilemap_coords.y += 1;
-    p.tile_coords.y = 0;
-  }
-  if (p.tile_coords.y < 0) {
-    p.tilemap_coords.y -= 1;
-    p.tile_coords.y = world->tile_count.y-1;
-  }
 
   return p;
 }
 
-/*
-Canonical_Position get_canonical_position(World *world, Raw_Position pos) {
-  Canonical_Position cpos = {};
+Tile_Chunk_Position get_chunk_pos(World *world, iv2 abs_tile_coords) {
+  Tile_Chunk_Position chunk_pos = {
+    .chunk_coords = iv2m(abs_tile_coords.x >> world->chunk_shift, abs_tile_coords.y >> world->chunk_shift),
+    .chunk_rel = iv2m(abs_tile_coords.x & world->chunk_mask, abs_tile_coords.y & world->chunk_mask),
+  };
 
-  cpos.tile_coords = iv2m((s32)(pos.tile_coords.x), (s32)(pos.tile_coords.y));
-  cpos.tile_rel_coords = v2m(
-      pos.tile_coords.x - cpos.tile_coords.x,
-      pos.tile_coords.y - cpos.tile_coords.y
-  );
-
-  // Transitions happen here
-  cpos.tilemap_coords = pos.tilemap_coords;
-  return cpos;
+  return chunk_pos;
 }
-*/
 
-b32 is_world_point_empty(World *world, Canonical_Position pos) {
+b32 is_world_point_empty(World *world, world_pos pos) {
   b32 empty = false;
 
-  Canonical_Position cpos = canonicalize_position(world, pos);
-  Tile_Map *tm = get_tilemap(world, cpos.tilemap_coords);
-  empty = is_tilemap_point_empty(world, tm, v2m(cpos.tile_coords.x, cpos.tile_coords.y));
+  world_pos cpos = canonicalize_position(world, pos);
+  Tile_Chunk_Position chunk_pos = get_chunk_pos(world, iv2m(cpos.abs_tile_coords.x, cpos.abs_tile_coords.y));
+  Tile_Chunk *chunk = get_tile_chunk(world, chunk_pos.chunk_coords);
+  empty = is_tile_chunk_tile_empty(world, chunk, v2m(cpos.abs_tile_coords.x, cpos.abs_tile_coords.y));
 
   return empty;
 }
@@ -136,61 +116,38 @@ void game_init(Game_State *gs) {
   gui_context_init(gs->frame_arena, &gs->font);
 
   // Initialize the world
-  static u32 tilemap00[6][8] = {
-    {1, 1, 1, 1,  1, 1, 1, 1},
-    {1, 0, 0, 0,  0, 0, 0, 1},
-    {1, 0, 1, 0,  0, 1, 0, 0},
-    {1, 0, 0, 0,  0, 0, 0, 1},
-    {1, 0, 0, 0,  0, 0, 0, 1},
-    {1, 1, 1, 0,  0, 1, 1, 1},
+  static u32 MegaTileChunk[256][256] = {
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+    {1,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,1,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
   };
 
-  static u32 tilemap10[6][8] = {
-    {1, 1, 1, 1,  1, 1, 1, 1},
-    {1, 0, 0, 0,  0, 0, 1, 1},
-    {0, 0, 0, 0,  0, 0, 0, 1},
-    {1, 0, 0, 0,  0, 0, 0, 1},
-    {1, 0, 0, 0,  0, 0, 1, 1},
-    {1, 1, 1, 0,  0, 1, 1, 1},
-  };
+  static Tile_Chunk tile_chunks[1][1] = {};
 
-  static u32 tilemap11[6][8] = {
-    {1, 1, 1, 0,  0, 1, 1, 1},
-    {1, 1, 1, 0,  0, 1, 1, 1},
-    {0, 0, 0, 0,  0, 0, 0, 1},
-    {1, 0, 0, 0,  0, 0, 0, 1},
-    {1, 0, 0, 0,  0, 0, 0, 1},
-    {1, 1, 1, 1,  1, 1, 1, 1},
-  };
-
-  static u32 tilemap01[6][8] = {
-    {1, 1, 1, 0,  0, 1, 1, 1},
-    {1, 1, 0, 0,  0, 0, 1, 1},
-    {1, 0, 0, 0,  0, 0, 0, 0},
-    {1, 0, 0, 0,  0, 0, 0, 1},
-    {1, 1, 0, 0,  0, 0, 1, 1},
-    {1, 1, 1, 1,  1, 1, 1, 1},
-  };
-  static Tile_Map maps[2][2] = {};
-
+  u32 chunk_shift = 8;
   gs->world = (World) {
-    .tilemap_count = iv2m(2,2),
+    .chunk_dim = 256,
+    .chunk_shift = chunk_shift,
+    .chunk_mask = ((1 << chunk_shift) - 1),
+    .tile_chunk_count = iv2m(1,1),
     .tile_dim_px = v2m(8,8),
     .tile_dim_meters = v2m(1.5,1.5),
     .tile_count = iv2m(8,6),
-    .maps = (Tile_Map*)maps,
+    .chunks = (Tile_Chunk*)tile_chunks,
   };
 
-  maps[0][0].tiles = (u32*)tilemap00;
-  maps[0][1].tiles = (u32*)tilemap10;
-  maps[1][1].tiles = (u32*)tilemap11;
-  maps[1][0].tiles = (u32*)tilemap01;
+  tile_chunks[0][0].tiles = (u32*)MegaTileChunk;
 
 
   // Initialize the player
-  gs->pp = (Canonical_Position){
-    .tilemap_coords = iv2m(0,0),
-    .tile_coords = iv2m(3,3),
+  gs->pp = (world_pos){
+    .abs_tile_coords = iv2m(2,2),
     .tile_rel_coords = v2m(0,0),
   };
   gs->player_dim_meters = v2_multf(gs->world.tile_dim_meters, 0.75);
@@ -230,7 +187,7 @@ void game_update(Game_State *gs, float dt) {
   // TODO: This is enough backend to make an audio mixer - do it
   u64 audio_samples_req = gs->audio_out.samples_requested;
   if (audio_samples_req > 0) {
-    f32 volume_mod = 0.01;
+    f32 volume_mod = 0.00;
     for (u32 sample_idx = 0; sample_idx < audio_samples_req; sample_idx+=1) {
       f32 freq = 400; // Hz
       f32 s = sin_f32(2 * PI * (freq/gs->audio_out.sample_rate) * gs->audio_out.current_sine_sample);
@@ -252,12 +209,20 @@ void game_render(Game_State *gs, float dt) {
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
-  Tile_Map *tm = get_tilemap(&gs->world, gs->pp.tilemap_coords);
+  Tile_Chunk *chunk = get_tile_chunk(&gs->world, get_chunk_pos(&gs->world, gs->pp.abs_tile_coords).chunk_coords);
+
+  // For Now at least chunk is always the [0][0] - lets asasert that
+  assert(UINT_FROM_PTR(chunk) == UINT_FROM_PTR(gs->world.chunks));
+
+  iv2 screen_offset = iv2m(-4,-3);
+  iv2 hero_offset = get_chunk_pos(&gs->world, gs->pp.abs_tile_coords).chunk_rel;
+  hero_offset.x += screen_offset.x;
+  hero_offset.y += screen_offset.y;
 
   // Draw The backgound
   for (u32 row = 0; row < 6; row+=1) {
     for (u32 col = 0; col < 8; col+=1) {
-      if (is_tilemap_point_empty(&gs->world, tm, v2m(col, row))) {
+      if (is_tile_chunk_tile_empty(&gs->world, chunk, v2m(col+hero_offset.x, row+hero_offset.y))) {
         game_push_atlas_rect(gs, 69, rec(col*TILE_W, row*TILE_H,TILE_W,TILE_H));
       } else {
         game_push_atlas_rect(gs, 1, rec(col*TILE_W, row*TILE_H,TILE_W,TILE_H));
@@ -273,14 +238,14 @@ void game_render(Game_State *gs, float dt) {
   if (input_key_down(&gs->input, KEY_SCANCODE_LEFT))new_player_pos.x-=hero_speed*dt;
   if (input_key_down(&gs->input, KEY_SCANCODE_RIGHT))new_player_pos.x+=hero_speed*dt;
 
-  Canonical_Position new_player_cpos = gs->pp;
+  world_pos new_player_cpos = gs->pp;
   new_player_cpos.tile_rel_coords = new_player_pos;
 
-  Canonical_Position new_player_cpos_left = new_player_cpos;
+  world_pos new_player_cpos_left = new_player_cpos;
   // we subtract pixels here!!
   new_player_cpos_left.tile_rel_coords.x -= gs->player_dim_meters.x/2;
 
-  Canonical_Position new_player_cpos_right = new_player_cpos;
+  world_pos new_player_cpos_right = new_player_cpos;
   // we subtract pixels here!!
   new_player_cpos_right.tile_rel_coords.x += gs->player_dim_meters.x/2;
 
@@ -294,8 +259,8 @@ void game_render(Game_State *gs, float dt) {
   // to also draw the current tile, mainly for debugging
 #if 1
   game_push_atlas_rect(gs, 16*6+2, 
-      rec( gs->pp.tile_coords.x*TILE_W,
-        gs->pp.tile_coords.y*TILE_H,
+      rec( -screen_offset.x*TILE_W,
+        -screen_offset.y*TILE_H,
         TILE_W,
         TILE_H
       )
@@ -304,8 +269,8 @@ void game_render(Game_State *gs, float dt) {
 
   v2 m2p = v2_div(gs->world.tile_dim_px, gs->world.tile_dim_meters);
   game_push_atlas_rect(gs, 9, 
-      rec( gs->pp.tile_coords.x*TILE_W + m2p.x*gs->pp.tile_rel_coords.x - m2p.x*gs->player_dim_meters.x/2,
-        gs->pp.tile_coords.y*TILE_H + m2p.y*gs->pp.tile_rel_coords.y,
+      rec( -screen_offset.x*TILE_W + m2p.x*gs->pp.tile_rel_coords.x - m2p.x*gs->player_dim_meters.x/2,
+        -screen_offset.y*TILE_H + m2p.y*gs->pp.tile_rel_coords.y,
         m2p.x*gs->player_dim_meters.x,
         m2p.y*gs->player_dim_meters.y
       )
