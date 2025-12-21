@@ -3,6 +3,12 @@
 
 #include "base/base_inc.h"
 
+typedef enum {
+  TILE_UNINITIALIZED = 0,
+  TILE_EMPTY = 1,
+  TILE_WALL = 2,
+}Tile_Value;
+
 typedef union iv2 {
     struct { s32 x,y; };
     struct { s32 u,v; };
@@ -28,7 +34,7 @@ typedef struct {
 
 // Absolute Tile Position (24 | 8) -> (Chunk | Offset)
 // meaning we can have 2^24 chunks and each chunk has 256 tiles
-typedef struct Tile_Map {
+typedef struct {
   s32 chunk_dim; // How many tiles a chunk has - typically 256
   iv2 tile_chunk_count;
   u32 chunk_shift;
@@ -41,10 +47,11 @@ typedef struct Tile_Map {
 
 
 u32 get_tile_chunk_value_nocheck(Tile_Map *tm, Tile_Chunk *chunk, iv2 tile_coords);
-b32 get_tile_value(Tile_Map *tm, Tile_Chunk *chunk, v2 test_point);
+b32 get_tile_value(Tile_Map *tm, Tile_Chunk *chunk, iv2 test_point);
 void set_tile_chunk_value_nocheck(Tile_Map *tm, Tile_Chunk *chunk, iv2 tile_coords, u32 tile_value);
-void set_tile_value(Tile_Map *tm, Tile_Chunk *chunk, v2 test_point, u32 tile_value);
-b32 is_tile_chunk_tile_empty(Tile_Map *tm, Tile_Chunk *chunk, v2 test_point);
+void set_tile_value(Tile_Map *tm, Tile_Chunk *chunk, iv2 test_point, u32 tile_value);
+void set_or_alloc_tile_value(Arena *arena, Tile_Map *tm, Tile_Chunk *chunk, iv2 test_point, u32 tile_value);
+b32 is_tile_chunk_tile_empty(Tile_Map *tm, Tile_Chunk *chunk, iv2 test_point);
 Tile_Chunk *get_tile_chunk(Tile_Map *tm, iv2 chunk_coords);
 Tile_Map_Position canonicalize_position(Tile_Map *tm, Tile_Map_Position can_pos);
 Tile_Chunk_Position get_chunk_pos(Tile_Map *tm, iv2 abs_tile_coords);

@@ -7,6 +7,7 @@
 
 typedef struct {
   Tile_Map *tm;
+  iv2 screen_dim_in_tiles;
   v2 lower_left_corner;
 } World;
 
