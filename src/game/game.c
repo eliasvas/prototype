@@ -1,12 +1,8 @@
 #include "game.h"
 #include "gui/gui.h"
 
-// For rand
+// For random (maybe we should make our own though..)
 #include "stdlib.h"
-
-// TODO: screen->world and world->screen with camera, so we can spawn at edges of camera entities
-#define TILE_W 8
-#define TILE_H 8
 
 //-------------------------------------
 // draw.h ??
@@ -14,9 +10,11 @@
 #define ATLAS_SPRITES_Y 10
 // Currently y-up right handed coord system,
 // Think about this, its probably what we want for world space transforms..
-void game_push_atlas_rect(Game_State *gs, u32 atlas_idx, rect r) {
+void game_push_atlas_rect(Game_State *gs, u32 atlas_idx, rect r, v2 tile_dim) {
   u32 xidx = (u32)atlas_idx % ATLAS_SPRITES_X;
   u32 yidx = (u32)atlas_idx / ATLAS_SPRITES_X;
+
+  tile_dim = v2m(8,8);
 
   // Calculate the y-up rect
   v2 llc = v2_divf(gs->world.lower_left_corner,gs->zoom);
@@ -24,7 +22,7 @@ void game_push_atlas_rect(Game_State *gs, u32 atlas_idx, rect r) {
   yup_rect.y = llc.y - r.h - r.y;
 
   R2D_Quad quad = (R2D_Quad) {
-      .src_rect = rec(xidx*TILE_W,yidx*TILE_H,TILE_W,TILE_H),
+      .src_rect = rec(xidx*tile_dim.x,yidx*tile_dim.y,tile_dim.x,tile_dim.y),
       .dst_rect = yup_rect,
       .c = col(1,1,1,1),
       .tex = gs->atlas,
@@ -35,6 +33,89 @@ void game_push_atlas_rect(Game_State *gs, u32 atlas_idx, rect r) {
 }
 //-----------------------------------------------
 
+
+
+// Entity index zero is always invalid
+b32 entity_idx_is_nil(u64 entity_idx) {
+  return (entity_idx == 0);
+}
+
+Entity *get_entity(Game_State *gs, u64 entity_idx) {
+  Entity *e = &gs->entities[0];
+  if ((entity_idx > 0) && (entity_idx < gs->entity_count)) {
+    e = &gs->entities[entity_idx];
+  }
+
+  // For now..
+  assert(!entity_idx_is_nil(entity_idx));
+
+  return e;
+}
+
+u64 add_entity(Game_State *gs) {
+  u64 entity_idx = 0;
+  // Make the nil entity first
+  if (gs->entity_count == 0) {
+    gs->entities[gs->entity_count++] = (Entity){};
+  }
+  // Add the actual entity
+  entity_idx = gs->entity_count; 
+  gs->entities[gs->entity_count++] = (Entity){
+//    .exists = true,
+  };
+
+  return entity_idx;
+}
+void initialize_player(Game_State *gs, u64 entity_idx) {
+  Entity *player_entity = get_entity(gs, entity_idx);
+
+  // Should this be a nil entity and we check??
+  if (player_entity) {
+    *player_entity = (Entity) {
+      .exists = true,
+      .p = (Tile_Map_Position){
+        .abs_tile_coords = iv2m(2,2),
+        .tile_rel_coords = v2m(0,0),
+      },
+      .dim_meters = v2_multf(gs->world.tm->tile_dim_meters, 0.75),
+    };
+  }
+  // TODO: we could also set camerafollowingentityindex ehre
+}
+
+// Maybe remove the gs
+void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
+  Entity *player = get_entity(gs, player_entity_idx);
+
+  // Move + Draw the hero
+  v2 new_player_pos = v2m(player->p.tile_rel_coords.x, player->p.tile_rel_coords.y);
+  f32 hero_speed = 15.0;
+  Input *input = &gs->input;
+  if (input_key_down(input, KEY_SCANCODE_UP))new_player_pos.y+=hero_speed*dt;
+  if (input_key_down(input, KEY_SCANCODE_DOWN))new_player_pos.y-=hero_speed*dt;
+  if (input_key_down(input, KEY_SCANCODE_LEFT))new_player_pos.x-=hero_speed*dt;
+  if (input_key_down(input, KEY_SCANCODE_RIGHT))new_player_pos.x+=hero_speed*dt;
+
+  Tile_Map_Position new_player_cpos = player->p;
+  new_player_cpos.tile_rel_coords = new_player_pos;
+
+  Tile_Map_Position new_player_cpos_left = new_player_cpos;
+  // we subtract pixels here!!
+  new_player_cpos_left.tile_rel_coords.x -= player->dim_meters.x/2;
+
+  Tile_Map_Position new_player_cpos_right = new_player_cpos;
+  // we subtract pixels here!!
+  new_player_cpos_right.tile_rel_coords.x += player->dim_meters.x/2;
+
+  if (is_tile_map_point_empty(gs->world.tm, new_player_cpos) && 
+      is_tile_map_point_empty(gs->world.tm, new_player_cpos_left) &&
+      is_tile_map_point_empty(gs->world.tm, new_player_cpos_right)) {
+    player->p = canonicalize_position(gs->world.tm, new_player_cpos);
+    Tile_Chunk_Position cp = get_chunk_pos(gs->world.tm, canonicalize_position(gs->world.tm, new_player_cpos_right).abs_tile_coords);
+    printf("chunk %d %d\n", cp.chunk_coords.x, cp.chunk_coords.y);
+  }
+
+}
 
 void game_init(Game_State *gs) {
   // Initialize the gui
@@ -49,7 +130,7 @@ void game_init(Game_State *gs) {
       .chunk_shift = chunk_shift,
       .chunk_mask = ((1 << chunk_shift) - 1),
       .tile_chunk_count = iv2m(128,128),
-      .tile_dim_px = v2m(8,8),
+      .tile_dim_px = v2m(16,16),
       .tile_dim_meters = v2m(1.5,1.5),
   };
   gs->world.tm->chunks = arena_push_array(gs->persistent_arena, Tile_Chunk, gs->world.tm->tile_chunk_count.x* gs->world.tm->tile_chunk_count.y);
@@ -112,13 +193,11 @@ void game_init(Game_State *gs) {
     }
   }
 
+  gs->player_entity_idx = add_entity(gs);
+  initialize_player(gs, gs->player_entity_idx);
+  gs->camera_following_entity_index = gs->player_entity_idx;
 
-  // Initialize the player
-  gs->pp = (Tile_Map_Position){
-    .abs_tile_coords = iv2m(2,2),
-    .tile_rel_coords = v2m(0,0),
-  };
-  gs->player_dim_meters = v2_multf(gs->world.tm->tile_dim_meters, 0.75);
+  // Should this GO AWAY?!
   gs->zoom = 2.0;
 }
 
@@ -134,11 +213,7 @@ void game_update(Game_State *gs, float dt) {
     gs->zoom/=2;
   }
 
-
-  //printf("hero tile coords: %d %d\n", gs->pp.tile_coords.x, gs->pp.tile_coords.y);
-  //printf("hero tile rel coords: %f %f\n", gs->pp.tile_rel_coords.x, gs->pp.tile_rel_coords.y);
-
-
+  /*
   // Audio test
   u32 sample_rate = 44100; 
   u32 num_seconds = 4;
@@ -156,9 +231,8 @@ void game_update(Game_State *gs, float dt) {
     wdata[i+1] = sample_value2;
   }
 
-  assert(write_sample_wav_file("build/hello.wav", wdata, num_samples * sizeof(wdata[0]),
-        num_channels, sample_rate, sizeof(wdata[0])*8)); 
-  // ------------------
+  assert(write_sample_wav_file("build/hello.wav", wdata, num_samples * sizeof(wdata[0]), num_channels, sample_rate, sizeof(wdata[0])*8)); 
+  */
 
   // Another audio test -- real time (!!)
   // TODO: This is enough backend to make an audio mixer - do it
@@ -192,74 +266,56 @@ void game_render(Game_State *gs, float dt) {
   s32 screens_to_draw = 4;
   iv2 screen_offset = iv2m(gs->world.screen_dim_in_tiles.x*screens_to_draw/2, gs->world.screen_dim_in_tiles.y*screens_to_draw/2);
 
-  v2 m2p = v2_div(gs->world.tm->tile_dim_px, gs->world.tm->tile_dim_meters);
-  v2 po = v2m(m2p.y*gs->pp.tile_rel_coords.x, m2p.y*gs->pp.tile_rel_coords.y);
+  if (!entity_idx_is_nil(gs->player_entity_idx)) {
 
-  // Draw The backgound
-  for (s32 row = -screen_offset.y; row < screen_offset.y; row+=1) {
-    for (s32 col = -screen_offset.x; col < screen_offset.x; col+=1) {
-      Tile_Map_Position tile_pos = (Tile_Map_Position){
-        .abs_tile_coords = iv2m(col+gs->pp.abs_tile_coords.x , row+gs->pp.abs_tile_coords.y),
-        .tile_rel_coords = v2m(0,0),
-      };
-      tile_pos = canonicalize_position(gs->world.tm, tile_pos);
+    move_player(gs, gs->player_entity_idx, dt);
 
-      Tile_Chunk_Position chunk_tile_pos = get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords);
- 
-      Tile_Chunk *chunk = get_tile_chunk(gs->world.tm, chunk_tile_pos.chunk_coords);
-      Tile_Value value = get_tile_value(gs->world.tm, chunk, chunk_tile_pos.chunk_rel);
+    Entity *player = get_entity(gs, gs->player_entity_idx);
 
-      if (value == TILE_UNINITIALIZED) { // uninitialized (nothing)
-        game_push_atlas_rect(gs, 68, rec(screen_offset.x*TILE_W + col*TILE_W-po.x, screen_offset.y*TILE_H + row*TILE_H-po.y,TILE_W,TILE_H));
-      } else if (value == TILE_EMPTY) { // empty (grass)
-        game_push_atlas_rect(gs, 69, rec(screen_offset.x*TILE_W + col*TILE_W-po.x, screen_offset.y*TILE_H + row*TILE_H-po.y,TILE_W,TILE_H));
-      } else { // wall
-        game_push_atlas_rect(gs, 1, rec(screen_offset.x*TILE_W + col*TILE_W-po.x, screen_offset.y*TILE_H + row*TILE_H-po.y,TILE_W,TILE_H));
+    v2 m2p = v2_div(gs->world.tm->tile_dim_px, gs->world.tm->tile_dim_meters);
+    v2 po = v2m(m2p.y*player->p.tile_rel_coords.x, m2p.y*player->p.tile_rel_coords.y);
+    v2 tile_dim = gs->world.tm->tile_dim_px;
+
+    // Draw The backgound
+    for (s32 row = -screen_offset.y; row < screen_offset.y; row+=1) {
+      for (s32 col = -screen_offset.x; col < screen_offset.x; col+=1) {
+        Tile_Map_Position tile_pos = (Tile_Map_Position){
+          .abs_tile_coords = iv2m(col+player->p.abs_tile_coords.x , row+player->p.abs_tile_coords.y),
+          .tile_rel_coords = v2m(0,0),
+        };
+        tile_pos = canonicalize_position(gs->world.tm, tile_pos);
+
+        Tile_Chunk_Position chunk_tile_pos = get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords);
+   
+        Tile_Chunk *chunk = get_tile_chunk(gs->world.tm, chunk_tile_pos.chunk_coords);
+        Tile_Value value = get_tile_value(gs->world.tm, chunk, chunk_tile_pos.chunk_rel);
+
+        if (value == TILE_UNINITIALIZED) { // uninitialized (nothing)
+          game_push_atlas_rect(gs, 68, rec(screen_offset.x*tile_dim.x + col*tile_dim.x-po.x, screen_offset.y*tile_dim.y + row*tile_dim.y-po.y,tile_dim.x,tile_dim.y), tile_dim);
+        } else if (value == TILE_EMPTY) { // empty (grass)
+          game_push_atlas_rect(gs, 69, rec(screen_offset.x*tile_dim.x + col*tile_dim.x-po.x, screen_offset.y*tile_dim.y + row*tile_dim.y-po.y,tile_dim.x,tile_dim.y), tile_dim);
+        } else { // blocker (wall)
+          game_push_atlas_rect(gs, 1, rec(screen_offset.x*tile_dim.x + col*tile_dim.x-po.x, screen_offset.y*tile_dim.y + row*tile_dim.y-po.y,tile_dim.x,tile_dim.y), tile_dim);
+        }
       }
     }
+
+    game_push_atlas_rect(gs, 16*6+2, 
+        rec( screen_offset.x*tile_dim.x - po.x, screen_offset.y*tile_dim.y - po.y,
+          tile_dim.x,
+          tile_dim.y
+        ), tile_dim
+    );
+
+    game_push_atlas_rect(gs, 9, 
+        rec( screen_offset.x*tile_dim.x + tile_dim.x/2 - m2p.x*player->dim_meters.x/2,
+          screen_offset.y*tile_dim.y + tile_dim.y/2,
+          m2p.x*player->dim_meters.x,
+          m2p.y*player->dim_meters.y
+        ), tile_dim
+    );
+
   }
-
-  // Move + Draw the hero
-  v2 new_player_pos = v2m(gs->pp.tile_rel_coords.x, gs->pp.tile_rel_coords.y);
-  f32 hero_speed = 15.0;
-  if (input_key_down(&gs->input, KEY_SCANCODE_UP))new_player_pos.y+=hero_speed*dt;
-  if (input_key_down(&gs->input, KEY_SCANCODE_DOWN))new_player_pos.y-=hero_speed*dt;
-  if (input_key_down(&gs->input, KEY_SCANCODE_LEFT))new_player_pos.x-=hero_speed*dt;
-  if (input_key_down(&gs->input, KEY_SCANCODE_RIGHT))new_player_pos.x+=hero_speed*dt;
-
-  Tile_Map_Position new_player_cpos = gs->pp;
-  new_player_cpos.tile_rel_coords = new_player_pos;
-
-  Tile_Map_Position new_player_cpos_left = new_player_cpos;
-  // we subtract pixels here!!
-  new_player_cpos_left.tile_rel_coords.x -= gs->player_dim_meters.x/2;
-
-  Tile_Map_Position new_player_cpos_right = new_player_cpos;
-  // we subtract pixels here!!
-  new_player_cpos_right.tile_rel_coords.x += gs->player_dim_meters.x/2;
-
-  if (is_tile_map_point_empty(gs->world.tm, new_player_cpos) && 
-      is_tile_map_point_empty(gs->world.tm, new_player_cpos_left) &&
-      is_tile_map_point_empty(gs->world.tm, new_player_cpos_right)) { gs->pp = canonicalize_position(gs->world.tm, new_player_cpos); Tile_Chunk_Position cp = get_chunk_pos(gs->world.tm, canonicalize_position(gs->world.tm, new_player_cpos_right).abs_tile_coords); printf("chunk %d %d\n", cp.chunk_coords.x, cp.chunk_coords.y);
-  }
-
-  // to also draw the current tile, mainly for debugging
-#if 1
-  game_push_atlas_rect(gs, 16*6+2, 
-      rec( screen_offset.x*TILE_W - po.x, screen_offset.y*TILE_H - po.y,
-        TILE_W,
-        TILE_H
-      )
-  );
-#endif
-
-  game_push_atlas_rect(gs, 9, 
-      rec( screen_offset.x*TILE_W + TILE_W/2 - m2p.x*gs->player_dim_meters.x/2,
-        screen_offset.y*TILE_H + TILE_H/2,
-        m2p.x*gs->player_dim_meters.x,
-        m2p.y*gs->player_dim_meters.y
-      )
-  );
 
   // ..
   // ..

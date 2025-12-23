@@ -6,6 +6,13 @@
 #include "tile.h"
 
 typedef struct {
+  b32 exists;
+  Tile_Map_Position p;
+  v2 delta_p;
+  v2 dim_meters; // width,height
+} Entity;
+
+typedef struct {
   Tile_Map *tm;
   iv2 screen_dim_in_tiles;
   v2 lower_left_corner;
@@ -36,11 +43,17 @@ typedef struct {
   // Game specific stuff
   f32 zoom;
   World world;
-  v2 player_dim_meters; // player dimensions (in pixels or???)
-  Tile_Map_Position pp;
+  //v2 player_dim_meters;
+  //Tile_Map_Position pp;
+  u64 entity_count;
+  Entity entities[256];
+
+  u64 player_entity_idx;
+  u64 camera_following_entity_index;
   
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;
+  v2 atlas_tile_dim;
   Ogl_Tex red;
   Font_Info font;
   Effect fill_effect;
