@@ -41,10 +41,7 @@ typedef struct {
   Game_Audio_Output_Buffer audio_out;
 
   // Game specific stuff
-  f32 zoom;
   World world;
-  //v2 player_dim_meters;
-  //Tile_Map_Position pp;
   u64 entity_count;
   Entity entities[256];
 
@@ -53,7 +50,7 @@ typedef struct {
   
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;
-  v2 atlas_tile_dim;
+  iv2 atlas_sprites_per_dim;
   Ogl_Tex red;
   Font_Info font;
   Effect fill_effect;

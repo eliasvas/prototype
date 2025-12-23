@@ -229,6 +229,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   assert(image.height > 0);
   assert(image.data != nullptr);
   gs->atlas = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT});
+  gs->atlas_sprites_per_dim = iv2m(16,10);
   gs->font = font_util_load_default_atlas(gs->persistent_arena, 64, 1024, 1024);
   gs->fill_effect = effect_make(EFFECT_KIND_FILL);
   gs->vortex_effect = effect_make(EFFECT_KIND_VORTEX);
