@@ -59,11 +59,15 @@ b32 entity_idx_is_nil(u64 entity_idx) {
   return (entity_idx == 0);
 }
 
-Entity *get_entity(Game_State *gs, u64 entity_idx) {
-  Entity *e = &gs->entities[0];
+Entity get_entity(Game_State *gs, Entity_Residence residence, u64 entity_idx) {
+  Entity e = {};
+
   if ((entity_idx > 0) && (entity_idx < gs->entity_count)) {
-    e = &gs->entities[entity_idx];
+    e.low = &gs->low_entities[entity_idx];
+    e.high = &gs->high_entities[entity_idx];
+    e.dormant = &gs->dormant_entities[entity_idx];
   }
+  // change_entity_residence(residence);
 
   // For now..
   assert(!entity_idx_is_nil(entity_idx));
@@ -75,63 +79,69 @@ u64 add_entity(Game_State *gs) {
   u64 entity_idx = 0;
   // Make the nil entity first
   if (gs->entity_count == 0) {
-    gs->entities[gs->entity_count++] = (Entity){};
+    gs->high_entities[gs->entity_count] = (High_Entity){};
+    gs->low_entities[gs->entity_count] = (Low_Entity){};
+    gs->dormant_entities[gs->entity_count] = (Dormant_Entity){};
+    gs->entity_count += 1;
   }
   // Add the actual entity
   entity_idx = gs->entity_count; 
-  gs->entities[gs->entity_count++] = (Entity){
-//    .exists = true,
-  };
+
+  gs->high_entities[gs->entity_count] = (High_Entity){};
+  gs->low_entities[gs->entity_count] = (Low_Entity){};
+  gs->dormant_entities[gs->entity_count] = (Dormant_Entity){};
+  gs->entity_count += 1;
 
   return entity_idx;
 }
 void initialize_player(Game_State *gs, u64 entity_idx) {
-  Entity *player_entity = get_entity(gs, entity_idx);
+  Entity player_entity = get_entity(gs, RESIDENCE_HIGH, entity_idx);
+
 
   // Should this be a nil entity and we check??
-  if (player_entity) {
-    *player_entity = (Entity) {
-      .exists = true,
-      .p = (Tile_Map_Position){
-        .abs_tile_coords = iv2m(2,2),
-        .tile_rel_coords = v2m(0,0),
-      },
-      .dim_meters = v2_multf(gs->world.tm->tile_dim_meters, 0.75),
-    };
-  }
+  *(player_entity.dormant) = (Dormant_Entity) {
+    .exists = true,
+    .p = (Tile_Map_Position){
+      .abs_tile_coords = iv2m(2,2),
+      .tile_rel_coords = v2m(0,0),
+    },
+    .dim_meters = v2_multf(gs->world.tm->tile_dim_meters, 0.75),
+  };
   // TODO: we could also set camerafollowingentityindex ehre
 }
 
 // Maybe remove the gs
 void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
-  Entity *player = get_entity(gs, player_entity_idx);
+  Entity player = get_entity(gs, RESIDENCE_HIGH, player_entity_idx);
 
-  // Move + Draw the hero
-  v2 new_player_pos = v2m(player->p.tile_rel_coords.x, player->p.tile_rel_coords.y);
-  f32 hero_speed = 15.0;
-  Input *input = &gs->input;
-  if (input_key_down(input, KEY_SCANCODE_UP))new_player_pos.y+=hero_speed*dt;
-  if (input_key_down(input, KEY_SCANCODE_DOWN))new_player_pos.y-=hero_speed*dt;
-  if (input_key_down(input, KEY_SCANCODE_LEFT))new_player_pos.x-=hero_speed*dt;
-  if (input_key_down(input, KEY_SCANCODE_RIGHT))new_player_pos.x+=hero_speed*dt;
+  if (player.residence != RESIDENCE_NONE) {
+    // Move + Draw the hero
+    v2 new_player_pos = v2m(player.p.tile_rel_coords.x, player.p.tile_rel_coords.y);
+    f32 hero_speed = 15.0;
+    Input *input = &gs->input;
+    if (input_key_down(input, KEY_SCANCODE_UP))new_player_pos.y+=hero_speed*dt;
+    if (input_key_down(input, KEY_SCANCODE_DOWN))new_player_pos.y-=hero_speed*dt;
+    if (input_key_down(input, KEY_SCANCODE_LEFT))new_player_pos.x-=hero_speed*dt;
+    if (input_key_down(input, KEY_SCANCODE_RIGHT))new_player_pos.x+=hero_speed*dt;
 
-  Tile_Map_Position new_player_cpos = player->p;
-  new_player_cpos.tile_rel_coords = new_player_pos;
+    Tile_Map_Position new_player_cpos = player.p;
+    new_player_cpos.tile_rel_coords = new_player_pos;
 
-  Tile_Map_Position new_player_cpos_left = new_player_cpos;
-  // we subtract pixels here!!
-  new_player_cpos_left.tile_rel_coords.x -= player->dim_meters.x/2;
+    Tile_Map_Position new_player_cpos_left = new_player_cpos;
+    // we subtract pixels here!!
+    new_player_cpos_left.tile_rel_coords.x -= player.dim_meters.x/2;
 
-  Tile_Map_Position new_player_cpos_right = new_player_cpos;
-  // we subtract pixels here!!
-  new_player_cpos_right.tile_rel_coords.x += player->dim_meters.x/2;
+    Tile_Map_Position new_player_cpos_right = new_player_cpos;
+    // we subtract pixels here!!
+    new_player_cpos_right.tile_rel_coords.x += player.dim_meters.x/2;
 
-  if (is_tile_map_point_empty(gs->world.tm, new_player_cpos) && 
-      is_tile_map_point_empty(gs->world.tm, new_player_cpos_left) &&
-      is_tile_map_point_empty(gs->world.tm, new_player_cpos_right)) {
-    player->p = canonicalize_position(gs->world.tm, new_player_cpos);
-    //Tile_Chunk_Position cp = get_chunk_pos(gs->world.tm, canonicalize_position(gs->world.tm, new_player_cpos_right).abs_tile_coords);
-    //printf("chunk %d %d\n", cp.chunk_coords.x, cp.chunk_coords.y);
+    if (is_tile_map_point_empty(gs->world.tm, new_player_cpos) && 
+        is_tile_map_point_empty(gs->world.tm, new_player_cpos_left) &&
+        is_tile_map_point_empty(gs->world.tm, new_player_cpos_right)) {
+      player.p = canonicalize_position(gs->world.tm, new_player_cpos);
+      //Tile_Chunk_Position cp = get_chunk_pos(gs->world.tm, canonicalize_position(gs->world.tm, new_player_cpos_right).abs_tile_coords);
+      //printf("chunk %d %d\n", cp.chunk_coords.x, cp.chunk_coords.y);
+    }
   }
 
 }
@@ -278,13 +288,13 @@ void game_render(Game_State *gs, float dt) {
 
     move_player(gs, gs->player_entity_idx, dt);
 
-    Entity *player = get_entity(gs, gs->player_entity_idx);
+    Entity player = get_entity(gs, RESIDENCE_HIGH, gs->player_entity_idx);
 
     // Draw The backgound
     for (s32 row = -screen_offset.y; row < screen_offset.y; row+=1) {
       for (s32 col = -screen_offset.x; col < screen_offset.x; col+=1) {
         Tile_Map_Position tile_pos = (Tile_Map_Position){
-          .abs_tile_coords = iv2m(col+player->p.abs_tile_coords.x , row+player->p.abs_tile_coords.y),
+          .abs_tile_coords = iv2m(col+player.p.abs_tile_coords.x , row+player.p.abs_tile_coords.y),
           .tile_rel_coords = v2m(0,0),
         };
         tile_pos = canonicalize_position(gs->world.tm, tile_pos);
@@ -294,23 +304,23 @@ void game_render(Game_State *gs, float dt) {
         Tile_Value value = get_tile_value(gs->world.tm, chunk, chunk_tile_pos.chunk_rel);
 
         if (value == TILE_UNINITIALIZED) { // uninitialized (nothing)
-          rend_push_tile(gs, 68, tile_pos, player->p, gs->world.tm->tile_dim_px);
+          rend_push_tile(gs, 68, tile_pos, player.p, gs->world.tm->tile_dim_px);
         } else if (value == TILE_EMPTY) { // empty (grass)
-          rend_push_tile(gs, 69, tile_pos, player->p, gs->world.tm->tile_dim_px);
+          rend_push_tile(gs, 69, tile_pos, player.p, gs->world.tm->tile_dim_px);
         } else { // blocker (wall)
-          rend_push_tile(gs, 1, tile_pos, player->p, gs->world.tm->tile_dim_px);
+          rend_push_tile(gs, 1, tile_pos, player.p, gs->world.tm->tile_dim_px);
         }
       }
     }
 
     // Render 'player tile visualization thing'
-    rend_push_tile(gs, 98, (Tile_Map_Position){.abs_tile_coords = player->p.abs_tile_coords}, player->p, gs->world.tm->tile_dim_px);
+    rend_push_tile(gs, 98, (Tile_Map_Position){.abs_tile_coords = player.p.abs_tile_coords}, player.p, gs->world.tm->tile_dim_px);
 
     // Render the player (player position is actually the halfway-x bottom-y point, so we offset a bit)
-    Tile_Map_Position pp_middle = player->p;
-    pp_middle.tile_rel_coords.x += (gs->world.tm->tile_dim_meters.x/2 - player->dim_meters.x/2);
+    Tile_Map_Position pp_middle = player.p;
+    pp_middle.tile_rel_coords.x += (gs->world.tm->tile_dim_meters.x/2 - player.dim_meters.x/2);
     pp_middle.tile_rel_coords.y += gs->world.tm->tile_dim_meters.y/2;
-    rend_push_tile(gs, 9, pp_middle, player->p, v2_mult(v2_div(gs->world.tm->tile_dim_px, gs->world.tm->tile_dim_meters), player->dim_meters));
+    rend_push_tile(gs, 9, pp_middle, player.p, v2_mult(v2_div(gs->world.tm->tile_dim_px, gs->world.tm->tile_dim_meters), player.dim_meters));
   }
 
   // ..

@@ -6,11 +6,45 @@
 #include "tile.h"
 
 typedef struct {
+  v2 p;
+} High_Entity;
+
+typedef struct {
+  // TODO: What should low_entity store huh??
+  int foo;
+} Low_Entity;
+
+typedef struct {
   b32 exists;
   Tile_Map_Position p;
   v2 delta_p;
-  v2 dim_meters; // width,height
+  v2 dim_meters;
+
+} Dormant_Entity;
+
+typedef enum{
+  RESIDENCE_NONE,
+  RESIDENCE_HIGH,
+  RESIDENCE_LOW,
+  RESIDENCE_DORMANT,
+} Entity_Residence;
+
+typedef struct {
+  High_Entity *high;
+  Low_Entity *low;
+  Dormant_Entity *dormant;
+
+  Entity_Residence residence;
+
+  // DELETEME
+  b32 exists;
+  Tile_Map_Position p;
+  v2 delta_p;
+  v2 dim_meters;
+
+
 } Entity;
+
 
 typedef struct {
   Tile_Map *tm;
@@ -43,7 +77,11 @@ typedef struct {
   // Game specific stuff
   World world;
   u64 entity_count;
-  Entity entities[256];
+
+  Entity_Residence entity_residence[256];
+  High_Entity high_entities[256];
+  Low_Entity low_entities[256];
+  Dormant_Entity dormant_entities[256];
 
   u64 player_entity_idx;
   u64 camera_following_entity_index;
