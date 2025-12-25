@@ -103,4 +103,22 @@ b32 is_tile_map_point_empty(Tile_Map *tm, Tile_Map_Position pos) {
   return empty;
 }
 
+// FIXME: This will lead to rounding errors, it would be
+// best if we could subtract positions tbh..
+// (instead of working with absolutes)
+v2 get_tilemap_fpos_in_meters(Tile_Map *tm, Tile_Map_Position pos) {
+  pos = canonicalize_position(tm, pos);
+
+  v2 tile_dim_px = tm->tile_dim_px; 
+  s32 chunk_dim = tm->chunk_dim; 
+  v2 p2m = v2_div(tm->tile_dim_meters, tm->tile_dim_px);
+  Tile_Chunk_Position chunk_pos = get_chunk_pos(tm, pos.abs_tile_coords);
+
+  return v2m(
+    p2m.x * chunk_pos.chunk_coords.x * chunk_dim * tile_dim_px.x + p2m.x * chunk_pos.chunk_rel.x * tile_dim_px.x + pos.tile_rel_coords.x,
+    p2m.y * chunk_pos.chunk_coords.y * chunk_dim * tile_dim_px.y + p2m.y * chunk_pos.chunk_rel.y * tile_dim_px.y + pos.tile_rel_coords.y
+  );
+
+}
+
 

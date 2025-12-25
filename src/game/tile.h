@@ -56,5 +56,6 @@ Tile_Chunk *get_tile_chunk(Tile_Map *tm, iv2 chunk_coords);
 Tile_Map_Position canonicalize_position(Tile_Map *tm, Tile_Map_Position can_pos);
 Tile_Chunk_Position get_chunk_pos(Tile_Map *tm, iv2 abs_tile_coords);
 b32 is_tile_map_point_empty(Tile_Map *tm, Tile_Map_Position pos);
+v2 get_tilemap_fpos_in_meters(Tile_Map *tm, Tile_Map_Position pos);
 
 #endif

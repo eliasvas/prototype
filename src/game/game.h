@@ -35,14 +35,6 @@ typedef struct {
   Dormant_Entity *dormant;
 
   Entity_Residence residence;
-
-  // DELETEME
-  b32 exists;
-  Tile_Map_Position p;
-  v2 delta_p;
-  v2 dim_meters;
-
-
 } Entity;
 
 
