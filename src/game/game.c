@@ -171,27 +171,61 @@ void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
     if (input_key_down(input, KEY_SCANCODE_LEFT))player_dp.x-=hero_speed*dt;
     if (input_key_down(input, KEY_SCANCODE_RIGHT))player_dp.x+=hero_speed*dt;
 
-#if 0
-    v2 new_player_pos = v2m(entity.dormant->p.tile_rel_coords.x, entity.dormant->p.tile_rel_coords.y);
-    // TODO: entity collision code
-    Tile_Map_Position new_player_cpos = entity.dormant->p;
-    new_player_cpos.tile_rel_coords = new_player_pos;
+    Tile_Map_Position player_tile_pos = entity.dormant->p;
+    player_tile_pos.tile_rel_coords = v2_add(player_tile_pos.tile_rel_coords, player_dp);
 
-    Tile_Map_Position new_player_cpos_left = new_player_cpos;
-    // we subtract pixels here!!
-    new_player_cpos_left.tile_rel_coords.x -= entity.dormant->dim_meters.x/2;
+    Tile_Map_Position player_tile_pos_left = player_tile_pos;
+    player_tile_pos_left.tile_rel_coords = v2_add(player_tile_pos.tile_rel_coords, v2m(-entity.dormant->dim_meters.x/2,0));
 
-    Tile_Map_Position new_player_cpos_right = new_player_cpos;
-    // we subtract pixels here!!
-    new_player_cpos_right.tile_rel_coords.x += entity.dormant->dim_meters.x/2;
-#endif
+    Tile_Map_Position player_tile_pos_right = player_tile_pos;
+    player_tile_pos_right.tile_rel_coords = v2_add(player_tile_pos.tile_rel_coords, v2m(entity.dormant->dim_meters.x/2,0));
+
+    s32 screens_to_draw = 2;
+    iv2 screen_offset = iv2m(gs->world.screen_dim_in_tiles.x*screens_to_draw/2, gs->world.screen_dim_in_tiles.y*screens_to_draw/2);
+
+    b32 collides = false;
+    for (s32 row = -screen_offset.y; row < screen_offset.y; row+=1) {
+      for (s32 col = -screen_offset.x; col < screen_offset.x; col+=1) {
+
+        Tile_Map_Position tile_pos = (Tile_Map_Position){
+          .abs_tile_coords = iv2m(col+camera.dormant->p.abs_tile_coords.x , row+camera.dormant->p.abs_tile_coords.y),
+          .tile_rel_coords = v2m(0,0),
+        };
+        tile_pos = canonicalize_position(gs->world.tm, tile_pos);
+
+        Tile_Chunk_Position chunk_tile_pos = get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords);
+        Tile_Chunk *chunk = get_tile_chunk(gs->world.tm, chunk_tile_pos.chunk_coords);
+        Tile_Value value = get_tile_value(gs->world.tm, chunk, chunk_tile_pos.chunk_rel);
+
+        if (value == TILE_UNINITIALIZED) { // uninitialized (nothing)
+        } else if (value == TILE_EMPTY) { // empty (grass)
+        } else { // blocker (wall)
+          v2 player_new_pos = v2_add(get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p), player_dp);
+
+          v2 pos_meters = get_tilemap_fpos_in_meters(gs->world.tm, tile_pos);
+          v2 tile_dim_mt = gs->world.tm->tile_dim_meters;
+
+          rect tile_collision_rect = rec(pos_meters.x, pos_meters.y, tile_dim_mt.x, tile_dim_mt.y);
+          if (!collides) {
+            collides = rect_isect_point(tile_collision_rect, player_new_pos);
+            if (collides) {
+              printf("collision succeded with rect %f %f %f %f and pos %f %f\n", pos_meters.x, pos_meters.y, tile_dim_mt.x, tile_dim_mt.y, player_dp.x, player_dp.y);
+            }
+          }
+        }
+
+      }
+    }
+
+    if (!collides) {
+     // entity.dormant->p = map_fpos_to_tile_map_position(gs->world.tm, camera.dormant->p, player_dp);
+    }
 
 
-
-#if 0
-    if (is_tile_map_point_empty(gs->world.tm, new_player_cpos) && 
-        is_tile_map_point_empty(gs->world.tm, new_player_cpos_left) &&
-        is_tile_map_point_empty(gs->world.tm, new_player_cpos_right)) {
+#if 1
+    if (is_tile_map_point_empty(gs->world.tm, player_tile_pos)
+     && is_tile_map_point_empty(gs->world.tm, player_tile_pos_right)
+     && is_tile_map_point_empty(gs->world.tm, player_tile_pos_left) ) {
 #else
       if (true) {
 #endif
@@ -213,7 +247,7 @@ void game_init(Game_State *gs) {
   gs->world.screen_dim_in_tiles = iv2m(9,7);
   gs->world.tm = arena_push_struct(gs->persistent_arena, Tile_Map);
   *(gs->world.tm) = (Tile_Map) {
-      .chunk_dim = chunk_shift*chunk_shift,
+      .chunk_dim = (s32)pow(2, chunk_shift),
       .chunk_shift = chunk_shift,
       .chunk_mask = ((1 << chunk_shift) - 1),
       .tile_chunk_count = iv2m(128,128),
