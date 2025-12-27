@@ -5,7 +5,8 @@
 #include "stdlib.h"
 
 
-void rend_push_tile(Game_State *gs, u32 atlas_idx, Tile_Map_Position tile, Tile_Map_Position camera, v2 dim_px) {
+
+void rend_push_tile_alpha(Game_State *gs, u32 atlas_idx, Tile_Map_Position tile, Tile_Map_Position camera, v2 dim_px, f32 alpha) {
   // Make a Tile_Map_Position w/ the needed coordinates relative to 'camera' Tile_Map_Position
   Tile_Map_Position relative_tp = tile;
   relative_tp.abs_tile_coords.x -= camera.abs_tile_coords.x;
@@ -54,7 +55,7 @@ void rend_push_tile(Game_State *gs, u32 atlas_idx, Tile_Map_Position tile, Tile_
   R2D_Quad quad = (R2D_Quad) {
       .src_rect = rec(xidx*px_per_tile.x, yidx*px_per_tile.y, px_per_tile.x, px_per_tile.y),
       .dst_rect = yup_rect,
-      .c = col(1,1,1,1),
+      .c = col(alpha,alpha,alpha,1),
       .tex = gs->atlas,
       .rot_deg = 0,
   };
@@ -64,6 +65,9 @@ void rend_push_tile(Game_State *gs, u32 atlas_idx, Tile_Map_Position tile, Tile_
 
 }
 
+void rend_push_tile(Game_State *gs, u32 atlas_idx, Tile_Map_Position tile, Tile_Map_Position camera, v2 dim_px) {
+  rend_push_tile_alpha(gs, atlas_idx, tile, camera, dim_px, 1.0);
+}
 
 // Entity index zero is always invalid
 b32 entity_idx_is_nil(u64 entity_idx) {
@@ -71,25 +75,19 @@ b32 entity_idx_is_nil(u64 entity_idx) {
 }
 
 void change_entity_residence(Game_State *gs, u32 entity_idx, Entity_Residence residence) {
-  Dormant_Entity camera_dormant = gs->dormant_entities[gs->camera_following_entity_index];
   if (residence == RESIDENCE_HIGH) {
     if (gs->entity_residence[entity_idx] != RESIDENCE_HIGH) {
       Dormant_Entity *dormant = &gs->dormant_entities[entity_idx];
       High_Entity *high = &gs->high_entities[entity_idx];
       Tile_Map_Position entity_pos = dormant->p;
-      Tile_Map_Position camera_pos = camera_dormant.p;
-
-      v2 camera_relative_pos = v2m(0,0);
-      high->p = camera_relative_pos;
+      Tile_Map_Position camera_pos = gs->world.camera_p;
 
       // We find the relative position for the entity and store it in the high_entity array 
       v2 entity_fpos = get_tilemap_fpos_in_meters(gs->world.tm, entity_pos);
       v2 camera_fpos = get_tilemap_fpos_in_meters(gs->world.tm, camera_pos);
       v2 relative_fpos = v2_sub(camera_fpos, entity_fpos);
       high->p = relative_fpos;
-
     }
-
   }
 
   gs->entity_residence[entity_idx] = residence;
@@ -100,13 +98,16 @@ Entity get_entity(Game_State *gs, Entity_Residence residence, u64 entity_idx) {
   Entity e = {};
 
   if ((entity_idx > 0) && (entity_idx < gs->entity_count)) {
+
+    if (gs->entity_residence[entity_idx] < residence) {
+      change_entity_residence(gs, entity_idx, residence);
+    }
+
     e.low = &gs->low_entities[entity_idx];
     e.high = &gs->high_entities[entity_idx];
     e.dormant = &gs->dormant_entities[entity_idx];
-    e.residence = RESIDENCE_DORMANT;
+    e.residence = gs->entity_residence[entity_idx];
   }
-  gs->entity_residence[entity_idx] = RESIDENCE_DORMANT;
-  change_entity_residence(gs, entity_idx, residence);
 
   // For now..
   assert(!entity_idx_is_nil(entity_idx));
@@ -114,7 +115,7 @@ Entity get_entity(Game_State *gs, Entity_Residence residence, u64 entity_idx) {
   return e;
 }
 
-u64 add_entity(Game_State *gs) {
+u64 add_entity(Game_State *gs, Entity_Kind kind) {
   u64 entity_idx = 0;
   // Make the nil entity first
   if (gs->entity_count == 0) {
@@ -128,11 +129,15 @@ u64 add_entity(Game_State *gs) {
 
   gs->high_entities[gs->entity_count] = (High_Entity){};
   gs->low_entities[gs->entity_count] = (Low_Entity){};
-  gs->dormant_entities[gs->entity_count] = (Dormant_Entity){};
+  gs->dormant_entities[gs->entity_count] = (Dormant_Entity){
+    .kind = kind,
+  };
   gs->entity_count += 1;
+  assert(gs->entity_count < array_count(gs->high_entities));
 
   return entity_idx;
 }
+
 static Tile_Map_Position map_fpos_to_tile_map_position(Tile_Map *tm, Tile_Map_Position pos, v2 offset_fpos) {
   Tile_Map_Position base = pos;
   base.tile_rel_coords = v2_add(base.tile_rel_coords, offset_fpos);
@@ -141,27 +146,87 @@ static Tile_Map_Position map_fpos_to_tile_map_position(Tile_Map *tm, Tile_Map_Po
   return base;
 }
 
-void initialize_player(Game_State *gs, u64 entity_idx) {
+u32 add_player(Game_State *gs) {
+  u32 entity_idx = add_entity(gs, ENTITY_KIND_PLAYER);
   Entity player_entity = get_entity(gs, RESIDENCE_HIGH, entity_idx);
-
 
   // Should this be a nil entity and we check??
   *(player_entity.dormant) = (Dormant_Entity) {
     .exists = true,
+    .kind = ENTITY_KIND_PLAYER,
     .p = (Tile_Map_Position){
       .abs_tile_coords = iv2m(2,2),
       .tile_rel_coords = v2m(0,0),
     },
     .dim_meters = v2_multf(gs->world.tm->tile_dim_meters, 0.75),
   };
-  // TODO: we could also set camerafollowingentityindex ehre
+  change_entity_residence(gs, entity_idx, RESIDENCE_HIGH);
+
+  return entity_idx;
+}
+
+u32 add_wall(Game_State *gs, iv2 tile_pos) {
+  u32 entity_idx = add_entity(gs, ENTITY_KIND_PLAYER);
+  Entity player_entity = get_entity(gs, RESIDENCE_HIGH, entity_idx);
+
+  // Should this be a nil entity and we check??
+  *(player_entity.dormant) = (Dormant_Entity) {
+    .exists = true,
+    .kind = ENTITY_KIND_WALL,
+    .p = (Tile_Map_Position){
+      .abs_tile_coords = iv2m(tile_pos.x, tile_pos.y),
+      .tile_rel_coords = v2m(0,0),
+    },
+    .dim_meters = v2_multf(gs->world.tm->tile_dim_meters, 1.0),
+  };
+  change_entity_residence(gs, entity_idx, RESIDENCE_DORMANT);
+
+  return entity_idx;
+}
+
+void set_camera(Game_State *gs, Tile_Map_Position new_camera_pos) {
+  // First, calculate the actual camera delta + set the new camera position
+  v2 prev_cam_pos_mt = get_tilemap_fpos_in_meters(gs->world.tm, gs->world.camera_p);
+  v2 new_cam_pos_mt = get_tilemap_fpos_in_meters(gs->world.tm, new_camera_pos);
+  v2 cam_diff_mt = v2_sub(prev_cam_pos_mt, new_cam_pos_mt);
+  gs->world.camera_p = new_camera_pos;
+
+  // Then, we fixup current High entities for the new camera delta
+  for (u32 entity_idx = 1; entity_idx < gs->entity_count; ++entity_idx) {
+    Entity entity = get_entity(gs, RESIDENCE_HIGH, entity_idx);
+    if (gs->entity_residence[entity_idx] == RESIDENCE_HIGH) {
+      entity.high->p = v2_add(entity.high->p, cam_diff_mt);
+    }
+  }
+  // Then, cull all entities outside camera bounding box - make them dormant!
+  // Or add them to high entities if they ARE inside the bounding box but dormant
+  s32 screens_to_include = 1;
+  v2 camera_p_in_ws = get_tilemap_fpos_in_meters(gs->world.tm, gs->world.camera_p);
+  rect camera_bounding_box = rec_centered(camera_p_in_ws, v2_multf(v2m(gs->world.screen_dim_in_tiles.x, gs->world.screen_dim_in_tiles.y), screens_to_include));
+  for (u32 entity_idx = 1; entity_idx < gs->entity_count; ++entity_idx) {
+    Entity entity = get_entity(gs, RESIDENCE_HIGH, entity_idx);
+
+    v2 entity_fpos = get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p);
+    rect entity_bounding_box = rec_centered(entity_fpos, v2_multf(entity.dormant->dim_meters, 0.5));
+
+    if (!rect_isect_rect(camera_bounding_box, entity_bounding_box)) {
+      if (gs->entity_residence[entity_idx] == RESIDENCE_HIGH) {
+        change_entity_residence(gs, entity_idx, RESIDENCE_DORMANT);
+      }
+    } else {
+      if (gs->entity_residence[entity_idx] != RESIDENCE_HIGH) {
+        change_entity_residence(gs, entity_idx, RESIDENCE_HIGH);
+      }
+    }
+      
+  }
+
 }
 
 void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
-  Entity entity = get_entity(gs, RESIDENCE_HIGH, player_entity_idx);
-  Entity camera = get_entity(gs, RESIDENCE_HIGH, gs->camera_following_entity_index);
+  Entity player = get_entity(gs, RESIDENCE_HIGH, player_entity_idx);
 
-  if (entity.residence != RESIDENCE_NONE) {
+  if (player.residence != RESIDENCE_NONE) {
     // Move + Draw the hero
     f32 hero_speed = 15.0;
     Input *input = &gs->input;
@@ -171,6 +236,7 @@ void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
     if (input_key_down(input, KEY_SCANCODE_LEFT))player_dp.x-=hero_speed*dt;
     if (input_key_down(input, KEY_SCANCODE_RIGHT))player_dp.x+=hero_speed*dt;
 
+#if 0
     Tile_Map_Position player_tile_pos = entity.dormant->p;
     player_tile_pos.tile_rel_coords = v2_add(player_tile_pos.tile_rel_coords, player_dp);
 
@@ -188,7 +254,7 @@ void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
       for (s32 col = -screen_offset.x; col < screen_offset.x; col+=1) {
 
         Tile_Map_Position tile_pos = (Tile_Map_Position){
-          .abs_tile_coords = iv2m(col+camera.dormant->p.abs_tile_coords.x , row+camera.dormant->p.abs_tile_coords.y),
+          .abs_tile_coords = iv2m(col+gs->world.camera_p.abs_tile_coords.x , row+gs->world.camera_p.abs_tile_coords.y),
           .tile_rel_coords = v2m(0,0),
         };
         tile_pos = canonicalize_position(gs->world.tm, tile_pos);
@@ -197,9 +263,8 @@ void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
         Tile_Chunk *chunk = get_tile_chunk(gs->world.tm, chunk_tile_pos.chunk_coords);
         Tile_Value value = get_tile_value(gs->world.tm, chunk, chunk_tile_pos.chunk_rel);
 
-        if (value == TILE_UNINITIALIZED) { // uninitialized (nothing)
-        } else if (value == TILE_EMPTY) { // empty (grass)
-        } else { // blocker (wall)
+        // Collision check
+        if (value != TILE_EMPTY){
           v2 player_new_pos = v2_add(get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p), player_dp);
           v2 player_new_pos_left = v2_add(v2_add(get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p), v2m(entity.dormant->dim_meters.x/2,0)), player_dp);
           v2 player_new_pos_right = v2_add(v2_sub(get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p), v2m(entity.dormant->dim_meters.x/2,0)), player_dp);
@@ -218,9 +283,36 @@ void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
         }
       }
     }
+#endif
 
+    // Check for player/tile collisions
+    b32 collides = false;
+    for (u32 entity_idx = 1; entity_idx < gs->entity_count; ++entity_idx) {
+      if (entity_idx != gs->player_entity_idx &&
+          gs->entity_residence[entity_idx] != RESIDENCE_NONE)
+      {
+        v2 player_new_pos = v2_add(get_tilemap_fpos_in_meters(gs->world.tm, player.dormant->p), player_dp);
+        v2 player_new_pos_left = v2_add(v2_add(get_tilemap_fpos_in_meters(gs->world.tm, player.dormant->p), v2m(player.dormant->dim_meters.x/2,0)), player_dp);
+        v2 player_new_pos_right = v2_add(v2_sub(get_tilemap_fpos_in_meters(gs->world.tm, player.dormant->p), v2m(player.dormant->dim_meters.x/2,0)), player_dp);
+
+        Entity entity = get_entity(gs, RESIDENCE_HIGH, entity_idx);
+        v2 entity_pos_meters = get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p);
+        v2 entity_dim_mt = entity.dormant->dim_meters;
+        rect entity_collision_rect = rec_centered(entity_pos_meters, v2_multf(entity_dim_mt,0.5));
+        if (!collides) {
+          collides = (rect_isect_point(entity_collision_rect, player_new_pos) ||
+                     rect_isect_point(entity_collision_rect, player_new_pos_left) ||
+                     rect_isect_point(entity_collision_rect, player_new_pos_right));
+          //if (collides) { printf("collision succeded with rect %f %f %f %f and pos %f %f\n", entity_pos_meters.x, entity_pos_meters.y, tile_dim_mt.x, tile_dim_mt.y, player_dp.x, player_dp.y); }
+        }
+      }
+    }
+ 
+
+    // If there is no collision map the new player position back to the dormant entity
     if (!collides) {
-     entity.dormant->p = map_fpos_to_tile_map_position(gs->world.tm, camera.dormant->p, player_dp);
+      player.high->p = v2_add(player.high->p, player_dp);
+      player.dormant->p = map_fpos_to_tile_map_position(gs->world.tm, gs->world.camera_p, player_dp);
     }
 
 
@@ -302,8 +394,12 @@ void game_init(Game_State *gs) {
             tval = TILE_WALL;
         }
 
-        //Tile_Chunk_Position cp = get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords);
+        // FIXME: Right now we are allocating on the tile map AND making an entity
         set_or_alloc_tile_value(gs->persistent_arena, gs->world.tm, chunk, get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords).chunk_rel, tval);
+        if (tval == TILE_WALL) {
+          add_wall(gs, tile_pos.abs_tile_coords);
+        }
+
       }
     }
     door_left = door_right; // carry-over from prev room
@@ -318,9 +414,7 @@ void game_init(Game_State *gs) {
     }
   }
 
-  gs->player_entity_idx = add_entity(gs);
-  initialize_player(gs, gs->player_entity_idx);
-  gs->camera_following_entity_index = gs->player_entity_idx;
+  gs->player_entity_idx = add_player(gs);
 }
 
 void game_update(Game_State *gs, float dt) {
@@ -361,6 +455,15 @@ void game_update(Game_State *gs, float dt) {
     }
   }
 
+  // Set the camera position
+  Entity camera = get_entity(gs, RESIDENCE_HIGH, gs->player_entity_idx);
+  set_camera(gs, camera.dormant->p);
+
+  // Move the player
+  if (!entity_idx_is_nil(gs->player_entity_idx)) {
+    move_player(gs, gs->player_entity_idx, dt);
+  }
+
 }
 
 
@@ -377,20 +480,15 @@ void game_render(Game_State *gs, float dt) {
 
 
   // A bit hacky.. you have to zoom in/ou with '-' and '='
-  s32 screens_to_draw = 2;
+  s32 screens_to_draw = 3;
   iv2 screen_offset = iv2m(gs->world.screen_dim_in_tiles.x*screens_to_draw/2, gs->world.screen_dim_in_tiles.y*screens_to_draw/2);
 
   if (!entity_idx_is_nil(gs->player_entity_idx)) {
-
-    move_player(gs, gs->player_entity_idx, dt);
-
-    Entity camera = get_entity(gs, RESIDENCE_HIGH, gs->camera_following_entity_index);
-
     // Draw The backgound
     for (s32 row = -screen_offset.y; row < screen_offset.y; row+=1) {
       for (s32 col = -screen_offset.x; col < screen_offset.x; col+=1) {
         Tile_Map_Position tile_pos = (Tile_Map_Position){
-          .abs_tile_coords = iv2m(col+camera.dormant->p.abs_tile_coords.x , row+camera.dormant->p.abs_tile_coords.y),
+          .abs_tile_coords = iv2m(col+gs->world.camera_p.abs_tile_coords.x , row+gs->world.camera_p.abs_tile_coords.y),
           .tile_rel_coords = v2m(0,0),
         };
         tile_pos = canonicalize_position(gs->world.tm, tile_pos);
@@ -400,44 +498,36 @@ void game_render(Game_State *gs, float dt) {
         Tile_Value value = get_tile_value(gs->world.tm, chunk, chunk_tile_pos.chunk_rel);
 
         if (value == TILE_UNINITIALIZED) { // uninitialized (nothing)
-          rend_push_tile(gs, 68, tile_pos, camera.dormant->p, gs->world.tm->tile_dim_px);
+          rend_push_tile(gs, 68, tile_pos, gs->world.camera_p, gs->world.tm->tile_dim_px);
         } else if (value == TILE_EMPTY) { // empty (grass)
-          rend_push_tile(gs, 69, tile_pos, camera.dormant->p, gs->world.tm->tile_dim_px);
+          rend_push_tile(gs, 69, tile_pos, gs->world.camera_p, gs->world.tm->tile_dim_px);
         } else { // blocker (wall)
-          rend_push_tile(gs, 1, tile_pos, camera.dormant->p, gs->world.tm->tile_dim_px);
+          rend_push_tile(gs, 1, tile_pos, gs->world.camera_p, gs->world.tm->tile_dim_px);
         }
       }
     }
-
-    /*
-    Entity player = get_entity(gs, RESIDENCE_HIGH, gs->player_entity_idx);
-    // Render 'player tile visualization thing'
-    rend_push_tile(gs, 98, (Tile_Map_Position){.abs_tile_coords = player.dormant->p.abs_tile_coords}, player.dormant->p, gs->world.tm->tile_dim_px);
-
-    // Render the enitites (entity position is actually the halfway-x bottom-y point, so we fixup a bit)
-    Tile_Map_Position pp_fixup = player.dormant->p;
-    pp_fixup.tile_rel_coords.x += (gs->world.tm->tile_dim_meters.x/2 - player.dormant->dim_meters.x/2);
-    pp_fixup.tile_rel_coords.y += gs->world.tm->tile_dim_meters.y/2;
-    rend_push_tile(gs, 9, pp_fixup, player.dormant->p, v2_mult(v2_div(gs->world.tm->tile_dim_px, gs->world.tm->tile_dim_meters), player.dormant->dim_meters));
-    */
   }
 
   // Render all the entities
   for (u32 entity_idx = 1; entity_idx < gs->entity_count; ++entity_idx) {
     Entity entity = get_entity(gs, RESIDENCE_HIGH, entity_idx);
     if (gs->entity_residence[entity_idx] != RESIDENCE_NONE) {
-      Entity camera = get_entity(gs, RESIDENCE_HIGH, gs->camera_following_entity_index);
-
       // If its the player also render the tile vizualization thingy
-      if (entity_idx ==  gs->player_entity_idx) {
-        rend_push_tile(gs, 98, (Tile_Map_Position){.abs_tile_coords = entity.dormant->p.abs_tile_coords}, camera.dormant->p, gs->world.tm->tile_dim_px);
+      if (entity_idx == gs->player_entity_idx) {
+        rend_push_tile(gs, 98, (Tile_Map_Position){.abs_tile_coords = entity.dormant->p.abs_tile_coords}, gs->world.camera_p, gs->world.tm->tile_dim_px);
       }
 
-      // Render the enitites (entity position is actually the halfway-x bottom-y point, so we fixup a bit)
-      Tile_Map_Position pp_fixup = entity.dormant->p;
-      pp_fixup.tile_rel_coords.x += (gs->world.tm->tile_dim_meters.x/2 - entity.dormant->dim_meters.x/2);
-      pp_fixup.tile_rel_coords.y += gs->world.tm->tile_dim_meters.y/2;
-      rend_push_tile(gs, 9, pp_fixup, camera.dormant->p, v2_mult(v2_div(gs->world.tm->tile_dim_px, gs->world.tm->tile_dim_meters), entity.dormant->dim_meters));
+      // Render the enitites (for players, entity 
+      // position is actually the halfway-x bottom-y point,
+      // so we fixup a bit)
+      if (entity.dormant->kind == ENTITY_KIND_PLAYER) {
+        Tile_Map_Position pp_fixup = entity.dormant->p;
+        pp_fixup.tile_rel_coords.x += (gs->world.tm->tile_dim_meters.x/2 - entity.dormant->dim_meters.x/2);
+        pp_fixup.tile_rel_coords.y += gs->world.tm->tile_dim_meters.y/2;
+        rend_push_tile_alpha(gs, 4, pp_fixup, gs->world.camera_p, v2_mult(v2_div(gs->world.tm->tile_dim_px, gs->world.tm->tile_dim_meters), entity.dormant->dim_meters), 0.5 + 0.5 * (entity.residence == RESIDENCE_HIGH));
+      } else {
+        rend_push_tile_alpha(gs, 1, entity.dormant->p, gs->world.camera_p, v2_mult(v2_div(gs->world.tm->tile_dim_px, gs->world.tm->tile_dim_meters), entity.dormant->dim_meters), 0.5 + 0.5 * (entity.residence == RESIDENCE_HIGH));
+      } 
     }
   }
 

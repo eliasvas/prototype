@@ -287,6 +287,14 @@ static bool rect_isect_point(rect r, v2 p) {
   return ((p.x >= r.x) && (p.x <= r.x+r.w)) && ((p.y >= r.y) && (p.y <= r.y+r.h));
 }
 
+static bool rect_isect_rect(rect l, rect r) {
+  return (rect_isect_point(l, v2m(r.x,    r.y)) &&
+          rect_isect_point(l, v2m(r.x+r.w, r.y)) &&
+          rect_isect_point(l, v2m(r.x,     r.y+r.h)) &&
+          rect_isect_point(l, v2m(r.x+r.w, r.y+r.h)));
+}
+
+
 static rect rect_calc_bounding_rect(rect r0, rect r1) {
   v2 p0 = v2m(
     minimum(r0.x, minimum(r0.x+r0.w, minimum(r1.x, r1.x+r1.w))),

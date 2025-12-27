@@ -5,6 +5,12 @@
 #include "core/core_inc.h"
 #include "tile.h"
 
+typedef enum {
+  ENTITY_KIND_NIL,
+  ENTITY_KIND_PLAYER,
+  ENTITY_KIND_WALL,
+} Entity_Kind;
+
 typedef struct {
   v2 p;
 } High_Entity;
@@ -16,6 +22,7 @@ typedef struct {
 
 typedef struct {
   b32 exists;
+  Entity_Kind kind;
   Tile_Map_Position p;
   v2 delta_p;
   v2 dim_meters;
@@ -40,6 +47,7 @@ typedef struct {
 
 typedef struct {
   Tile_Map *tm;
+  Tile_Map_Position camera_p;
   iv2 screen_dim_in_tiles;
   v2 lower_left_corner;
 } World;
@@ -70,13 +78,12 @@ typedef struct {
   World world;
   u64 entity_count;
 
-  Entity_Residence entity_residence[256];
-  High_Entity high_entities[256];
-  Low_Entity low_entities[256];
-  Dormant_Entity dormant_entities[256];
+  Entity_Residence entity_residence[1024*10];
+  High_Entity high_entities[1024*10];
+  Low_Entity low_entities[1024*10];
+  Dormant_Entity dormant_entities[1024*10];
 
   u64 player_entity_idx;
-  u64 camera_following_entity_index;
   
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;
