@@ -201,28 +201,31 @@ void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
         } else if (value == TILE_EMPTY) { // empty (grass)
         } else { // blocker (wall)
           v2 player_new_pos = v2_add(get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p), player_dp);
+          v2 player_new_pos_left = v2_add(v2_add(get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p), v2m(entity.dormant->dim_meters.x/2,0)), player_dp);
+          v2 player_new_pos_right = v2_add(v2_sub(get_tilemap_fpos_in_meters(gs->world.tm, entity.dormant->p), v2m(entity.dormant->dim_meters.x/2,0)), player_dp);
 
           v2 pos_meters = get_tilemap_fpos_in_meters(gs->world.tm, tile_pos);
           v2 tile_dim_mt = gs->world.tm->tile_dim_meters;
 
-          rect tile_collision_rect = rec(pos_meters.x, pos_meters.y, tile_dim_mt.x, tile_dim_mt.y);
+          // (0,0) is at tile center so we need a helper here sadly rect_middle_half_dim or something
+          rect tile_collision_rect = rec_centered(pos_meters, v2_multf(tile_dim_mt,0.5));
           if (!collides) {
-            collides = rect_isect_point(tile_collision_rect, player_new_pos);
-            if (collides) {
-              printf("collision succeded with rect %f %f %f %f and pos %f %f\n", pos_meters.x, pos_meters.y, tile_dim_mt.x, tile_dim_mt.y, player_dp.x, player_dp.y);
-            }
+            collides = (rect_isect_point(tile_collision_rect, player_new_pos) ||
+                       rect_isect_point(tile_collision_rect, player_new_pos_left) ||
+                       rect_isect_point(tile_collision_rect, player_new_pos_right));
+            //if (collides) { printf("collision succeded with rect %f %f %f %f and pos %f %f\n", pos_meters.x, pos_meters.y, tile_dim_mt.x, tile_dim_mt.y, player_dp.x, player_dp.y); }
           }
         }
-
       }
     }
 
     if (!collides) {
-     // entity.dormant->p = map_fpos_to_tile_map_position(gs->world.tm, camera.dormant->p, player_dp);
+     entity.dormant->p = map_fpos_to_tile_map_position(gs->world.tm, camera.dormant->p, player_dp);
     }
 
 
-#if 1
+#if 0
+#if 0
     if (is_tile_map_point_empty(gs->world.tm, player_tile_pos)
      && is_tile_map_point_empty(gs->world.tm, player_tile_pos_right)
      && is_tile_map_point_empty(gs->world.tm, player_tile_pos_left) ) {
@@ -234,6 +237,7 @@ void move_player(Game_State *gs, u64 player_entity_idx, f32 dt) {
       //Tile_Chunk_Position cp = get_chunk_pos(gs->world.tm, canonicalize_position(gs->world.tm, new_player_cpos_right).abs_tile_coords);
       //printf("chunk %d %d\n", cp.chunk_coords.x, cp.chunk_coords.y);
     }
+#endif
   }
 
 }

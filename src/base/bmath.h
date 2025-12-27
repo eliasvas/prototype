@@ -280,6 +280,9 @@ static rect rec(f32 x, f32 y, f32 w, f32 h) {
   return (rect){{x,y,w,h}};
 }
 
+static rect rec_centered(v2 center, v2 hdim) {
+  return (rect){{center.x-hdim.x, center.y-hdim.y, hdim.x*2, hdim.y*2}};
+}
 static bool rect_isect_point(rect r, v2 p) {
   return ((p.x >= r.x) && (p.x <= r.x+r.w)) && ((p.y >= r.y) && (p.y <= r.y+r.h));
 }
