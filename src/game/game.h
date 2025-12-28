@@ -13,12 +13,9 @@ typedef enum {
 
 typedef struct {
   v2 p;
-} High_Entity;
 
-typedef struct {
-  // TODO: What should low_entity store huh??
-  int foo;
-} Low_Entity;
+  u32 low_entity_idx;
+} High_Entity;
 
 typedef struct {
   b32 exists;
@@ -27,21 +24,14 @@ typedef struct {
   v2 delta_p;
   v2 dim_meters;
 
-} Dormant_Entity;
-
-typedef enum{
-  RESIDENCE_NONE,
-  RESIDENCE_HIGH,
-  RESIDENCE_LOW,
-  RESIDENCE_DORMANT,
-} Entity_Residence;
+  u32 high_entity_idx;
+} Low_Entity;
 
 typedef struct {
   High_Entity *high;
   Low_Entity *low;
-  Dormant_Entity *dormant;
 
-  Entity_Residence residence;
+  u32 low_entity_idx;
 } Entity;
 
 
@@ -78,12 +68,13 @@ typedef struct {
   World world;
   u64 entity_count;
 
-  Entity_Residence entity_residence[1024*10];
-  High_Entity high_entities[1024*10];
-  Low_Entity low_entities[1024*10];
-  Dormant_Entity dormant_entities[1024*10];
+  u64 high_entity_count;
+  High_Entity high_entities[256];
 
-  u64 player_entity_idx;
+  u64 low_entity_count;
+  Low_Entity low_entities[1024*10];
+
+  u64 player_low_entity_idx;
   
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;

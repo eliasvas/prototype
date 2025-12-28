@@ -353,7 +353,8 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
     platform_unload_game_api(&game_api);
     assert(platform_try_load_game_api(&game_api));
     //arena_clear(sdl_state->gs.persistent_arena); // optional 
-    game_api.init(&sdl_state->gs);
+    // TODO: should we have a case where we do game.init(..) too after loading
+    //game_api.init(&sdl_state->gs); 
   }
 #endif
 
