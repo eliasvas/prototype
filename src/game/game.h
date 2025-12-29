@@ -3,7 +3,7 @@
 
 #include "base/base_inc.h"
 #include "core/core_inc.h"
-#include "tile.h"
+#include "world.h"
 
 typedef enum {
   ENTITY_KIND_NIL,
@@ -20,7 +20,7 @@ typedef struct {
 typedef struct {
   b32 exists;
   Entity_Kind kind;
-  Tile_Map_Position p;
+  World_Position p;
   v2 delta_p;
   v2 dim_meters;
 
@@ -36,11 +36,11 @@ typedef struct {
 
 
 typedef struct {
-  Tile_Map *tm;
-  Tile_Map_Position camera_p;
+  World *w;
+  World_Position camera_p;
   iv2 screen_dim_in_tiles;
   v2 lower_left_corner;
-} World;
+} Game_World;
 
 typedef struct {
   s32 current_sine_sample; // not needed
@@ -65,7 +65,7 @@ typedef struct {
   Game_Audio_Output_Buffer audio_out;
 
   // Game specific stuff
-  World world;
+  Game_World world;
   u64 entity_count;
 
   u64 high_entity_count;
