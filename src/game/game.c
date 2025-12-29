@@ -306,7 +306,7 @@ void game_init(Game_State *gs) {
       .tile_dim_px = v2m(32,32),
       .tile_dim_meters = v2m(1.5,1.5),
   };
-  gs->world.tm->chunks = arena_push_array(gs->persistent_arena, Tile_Chunk, gs->world.tm->tile_chunk_count.x* gs->world.tm->tile_chunk_count.y);
+  //gs->world.tm->chunks = arena_push_array(gs->persistent_arena, Tile_Chunk, gs->world.tm->tile_chunk_count.x* gs->world.tm->tile_chunk_count.y);
 
   
   // Map generation (!!)
@@ -333,7 +333,7 @@ void game_init(Game_State *gs) {
         };
         tile_pos = canonicalize_position(gs->world.tm, tile_pos);
 
-        Tile_Chunk *chunk = get_tile_chunk(gs->world.tm, get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords).chunk_coords);
+        Tile_Chunk *chunk = get_tile_chunk_arena(gs->world.tm, get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords).chunk_coords, gs->persistent_arena);
         Tile_Value tval = TILE_EMPTY;
 
         if ((tile_x == 0) && !(door_left && (tile_y == gs->world.screen_dim_in_tiles.y/2))) {
@@ -351,7 +351,7 @@ void game_init(Game_State *gs) {
         }
 
         // FIXME: Right now we are allocating on the tile map AND making an entity
-        set_or_alloc_tile_value(gs->persistent_arena, gs->world.tm, chunk, get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords).chunk_rel, tval);
+        set_tile_value(gs->world.tm, chunk, get_chunk_pos(gs->world.tm, tile_pos.abs_tile_coords).chunk_rel, tval);
         if (tval == TILE_WALL) {
           add_wall(gs, tile_pos.abs_tile_coords);
         }

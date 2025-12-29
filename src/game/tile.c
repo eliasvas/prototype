@@ -17,21 +17,6 @@ void set_tile_value(Tile_Map *tm, Tile_Chunk *chunk, iv2 tile_pos, u32 tile_valu
   }
 }
 
-void set_or_alloc_tile_value(Arena *arena, Tile_Map *tm, Tile_Chunk *chunk, iv2 test_point, u32 tile_value) {
-  assert(chunk);
-  // If chunk's tiles not found, alloc them and default init to empty
-  if (!chunk->tiles) {
-    chunk->tiles = arena_push_array(arena, u32, tm->chunk_dim * tm->chunk_dim);
-    for (s32 tile_y = 0; tile_y < tm->chunk_dim; tile_y +=1) {
-      for (s32 tile_x = 0; tile_x < tm->chunk_dim; tile_x +=1) {
-        Tile_Value tval = TILE_EMPTY;
-        chunk->tiles[tile_x + tile_y * tm->chunk_dim] = tval;
-      }
-    }
-  }
-  set_tile_value(tm, chunk, test_point, tile_value);
-}
-
 u32 get_tile_chunk_value_nocheck(Tile_Map *tm, Tile_Chunk *chunk, iv2 tile_coords) {
   assert(chunk);
   assert((tile_coords.x >= 0) && (tile_coords.x < tm->chunk_dim) &&
@@ -56,13 +41,36 @@ b32 is_tile_chunk_tile_empty(Tile_Map *tm, Tile_Chunk *chunk, iv2 test_point) {
   return empty;
 }
 
-Tile_Chunk *get_tile_chunk(Tile_Map *tm, iv2 chunk_coords) {
+Tile_Chunk *get_tile_chunk_arena(Tile_Map *tm, iv2 chunk_coords, Arena *arena) {
   Tile_Chunk *chunk= nullptr;
-  if ((chunk_coords.x >= 0) && (chunk_coords.x < tm->tile_chunk_count.x) &&
-        (chunk_coords.y >= 0) && (chunk_coords.x < tm->tile_chunk_count.y)) {
-    chunk = &tm->chunks[chunk_coords.x + tm->tile_chunk_count.x * chunk_coords.y];
+
+  // TODO: better hash function
+  u32 coord_hash = 33*chunk_coords.x + 68*chunk_coords.y;
+  u32 hash_slot = coord_hash % array_count(tm->chunk_slots);
+
+  b32 found = false;
+  for (Tile_Chunk *c = tm->chunk_slots[hash_slot]; c != nullptr; c = c->next) {
+    if (c->tile_chunk_x == chunk_coords.x && c->tile_chunk_y == chunk_coords.y) {
+      chunk = c;
+      found = true;
+    }
   }
+  if (!found && arena) {
+    Tile_Chunk *new_chunk = arena_push_struct(arena, Tile_Chunk);
+    new_chunk->tile_chunk_x = chunk_coords.x;
+    new_chunk->tile_chunk_y = chunk_coords.y;
+    new_chunk->tiles = arena_push_array(arena, u32, tm->chunk_dim * tm->chunk_dim);
+
+    tm->chunk_slots[hash_slot] = sll_stack_push(tm->chunk_slots[hash_slot], new_chunk);
+
+    chunk = new_chunk;
+  }
+
   return chunk;
+}
+
+Tile_Chunk *get_tile_chunk(Tile_Map *tm, iv2 chunk_coords) {
+  return get_tile_chunk_arena(tm, chunk_coords, nullptr);
 }
 
 Tile_Map_Position canonicalize_position(Tile_Map *tm, Tile_Map_Position can_pos) {
