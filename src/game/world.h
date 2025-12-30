@@ -18,14 +18,19 @@ typedef union iv2 {
 static iv2 iv2m(s32 x, s32 y)    { return (iv2){{x, y}}; }
 
 typedef struct {
-  iv2 abs_coords; // which tile
+  iv2 chunk; // which chunk
   v2 offset; // sub-tile position (fractional)
 } World_Position;
 
-typedef struct {
-  iv2 chunk_coords; // which 256x256 chunk
-  iv2 chunk_rel; // which tile inside the chunk e.g T(255,125)
-} World_Chunk_Position;
+typedef struct World_Entity_Block World_Entity_Block; 
+struct World_Entity_Block {
+  u32 low_entity_indices[16];
+  u32 count;
+  u32 cap;
+
+  World_Entity_Block *next;
+  World_Entity_Block *prev;
+};
 
 typedef struct World_Chunk World_Chunk;
 struct World_Chunk {
@@ -35,7 +40,10 @@ struct World_Chunk {
   s32 chunk_z;
 
   // TODO: Make an entity block instead of this
-  u32 *tiles;
+  //u32 *tiles;
+
+  World_Entity_Block *first;
+  World_Entity_Block *last;
 
   World_Chunk *next;
 };
@@ -43,19 +51,19 @@ struct World_Chunk {
 // Absolute Tile Position (24 | 8) -> (Chunk | Offset)
 // meaning we can have 2^24 chunks and each chunk has 256 tiles
 typedef struct {
-  u32 chunk_shift;
-  u32 chunk_mask;
-  s32 chunk_dim; // How many tiles a chunk has - typically 256
-
-  v2 tile_dim_meters; // How big each tile in the map is in meters 
-  v2 tile_dim_px; // How big each tile in the map is in px
+  f32 tiles_per_chunk; // maybe tiles per block
+  v2 tile_dim_meters;
+  v2 tile_dim_px;
+  v2 chunk_dim_meters;
   
+  World_Entity_Block *block_freelist;
   World_Chunk *chunk_slots[1024];
 } World;
 
 World_Position canonicalize_position(World *tm, World_Position pos);
 v2 get_world_fpos_in_meters(World *tm, World_Position pos);
 World_Chunk *get_world_chunk_arena(World *tm, iv2 chunk_coords, Arena *arena);
-World_Chunk_Position get_chunk_pos(World *tm, iv2 abs_coords);
+World_Position chunk_pos_from_tile_pos(World *w, iv2 abs_tile);
+b32 are_in_same_chunk(World *w, World_Position a, World_Position b);
 
 #endif

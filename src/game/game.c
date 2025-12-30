@@ -7,12 +7,14 @@
 
 void rend_push_tile_alpha(Game_State *gs, u32 atlas_idx, World_Position tile, World_Position camera, v2 dim_px, f32 alpha) {
   // Make a World_Position w/ the needed coordinates relative to 'camera' World_Position
+  /*
   World_Position relative_tp = tile;
-  relative_tp.abs_coords.x -= camera.abs_coords.x;
-  relative_tp.abs_coords.y -= camera.abs_coords.y;
+  relative_tp.chunk.x -= camera.chunk.x;
+  relative_tp.chunk.y -= camera.chunk.y;
   relative_tp.offset.x -= camera.offset.x;
   relative_tp.offset.y -= camera.offset.y;
   relative_tp = canonicalize_position(gs->world.w, relative_tp);
+  */
 
   // Calculate on-screen coords
   v2 m2p = v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters);
@@ -171,10 +173,7 @@ u32 add_player(Game_State *gs) {
   *(player_entity.low) = (Low_Entity) {
     .exists = true,
     .kind = ENTITY_KIND_PLAYER,
-    .p = (World_Position){
-      .abs_coords = iv2m(2,2),
-      .offset = v2m(0,0),
-    },
+    .p = chunk_pos_from_tile_pos(gs->world.w, iv2m(2,2)),
     .dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.75),
   };
 
@@ -184,15 +183,11 @@ u32 add_player(Game_State *gs) {
 u32 add_wall(Game_State *gs, iv2 tile_pos) {
   u32 low_entity_idx = add_entity(gs, ENTITY_KIND_WALL);
 
-
   Low_Entity *low = get_low_entity(gs, low_entity_idx);
   *low = (Low_Entity) {
     .exists = true,
     .kind = ENTITY_KIND_WALL,
-    .p = (World_Position){
-      .abs_coords = iv2m(tile_pos.x, tile_pos.y),
-      .offset = v2m(0,0),
-    },
+    .p = chunk_pos_from_tile_pos(gs->world.w, tile_pos),
     .dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0),
   };
 
@@ -283,18 +278,16 @@ void move_player(Game_State *gs, u64 player_low_entity_idx, f32 dt) {
 
 void game_init(Game_State *gs) {
 
-  u32 chunk_shift = 4;
   // Initialize the World
   gs->world.screen_dim_in_tiles = iv2m(9,7);
   gs->world.w = arena_push_struct(gs->persistent_arena, World);
   *(gs->world.w) = (World) {
-      .chunk_dim = (s32)pow(2, chunk_shift),
-      .chunk_shift = chunk_shift,
-      .chunk_mask = ((1 << chunk_shift) - 1),
       .tile_dim_px = v2m(32,32),
-      .tile_dim_meters = v2m(1.5,1.5),
+      .tile_dim_meters = v2m(1.5, 1.5),
+      .tiles_per_chunk = 16,
   };
-  //gs->world.w->chunks = arena_push_array(gs->persistent_arena, World_Chunk, gs->world.w->world_chunk_count.x* gs->world.w->world_chunk_count.y);
+  gs->world.w->chunk_dim_meters = v2_multf(gs->world.w->tile_dim_meters, gs->world.w->tiles_per_chunk);
+  M_ZERO_STRUCT(gs->world.w->chunk_slots);
 
   
   // Map generation (!!)
@@ -315,13 +308,14 @@ void game_init(Game_State *gs) {
 
     for (s32 tile_y = 0; tile_y < gs->world.screen_dim_in_tiles.y; tile_y +=1) {
       for (s32 tile_x = 0; tile_x < gs->world.screen_dim_in_tiles.x; tile_x +=1) {
-        World_Position tile_pos = (World_Position){
-          .abs_coords = iv2m(tile_x + screen_offset.x*gs->world.screen_dim_in_tiles.x, tile_y + screen_offset.y*gs->world.screen_dim_in_tiles.y),
-          .offset = v2m(0,0),
-        };
-        tile_pos = canonicalize_position(gs->world.w, tile_pos);
 
-        //World_Chunk *chunk = get_world_chunk_arena(gs->world.w, get_chunk_pos(gs->world.w, tile_pos.abs_coords).chunk_coords, gs->persistent_arena);
+        iv2 tile_pos = iv2m(
+            tile_x + screen_offset.x*gs->world.screen_dim_in_tiles.x,
+            tile_y + screen_offset.y*gs->world.screen_dim_in_tiles.y
+      );
+        //World_Position wp = chunk_pos_from_tile_pos(gs->world.w, tile_pos);
+        //wp = canonicalize_position(gs->world.w, tile_pos);
+
         Tile_Value tval = TILE_EMPTY;
         if ((tile_x == 0) && !(door_left && (tile_y == gs->world.screen_dim_in_tiles.y/2))) {
             tval = TILE_WALL;
@@ -337,11 +331,8 @@ void game_init(Game_State *gs) {
             tval = TILE_WALL;
         }
 
-        // FIXME: Right now we are allocating on the tile map AND making an entity
-        //set_tile_value(gs->world.w, chunk, get_chunk_pos(gs->world.w, tile_pos.abs_coords).chunk_rel, tval);
-        
         if (tval == TILE_WALL) {
-          add_wall(gs, tile_pos.abs_coords);
+          add_wall(gs, tile_pos);
         }
 
       }
@@ -466,7 +457,11 @@ void game_render(Game_State *gs, float dt) {
     Low_Entity *low = get_low_entity(gs, low_entity_idx);
     // If its the player also render the tile vizualization thingy
     if (low_entity_idx == gs->player_low_entity_idx) {
-      rend_push_tile(gs, 98, (World_Position){.abs_coords = low->p.abs_coords}, gs->world.camera_p, gs->world.w->tile_dim_px);
+      // Position of the player (only chunk/tile, no tile-offset)
+      World_Position player_tile_wp = low->p;
+      player_tile_wp.offset.x -= mod_f32(player_tile_wp.offset.x, gs->world.w->tile_dim_meters.x);
+      player_tile_wp.offset.y -= mod_f32(player_tile_wp.offset.y, gs->world.w->tile_dim_meters.y);
+      rend_push_tile(gs, 98, player_tile_wp, gs->world.camera_p, gs->world.w->tile_dim_px);
     }
 
     // Render the enitites (for players, entity 
@@ -474,8 +469,10 @@ void game_render(Game_State *gs, float dt) {
     // so we fixup a bit)
     if (low->kind == ENTITY_KIND_PLAYER) {
       World_Position pp_fixup = low->p;
-      pp_fixup.offset.x += (gs->world.w->tile_dim_meters.x/2 - low->dim_meters.x/2);
-      pp_fixup.offset.y += gs->world.w->tile_dim_meters.y/2;
+      // FIXME FIXME FIXME offset for player is not correct!!!
+      //pp_fixup.offset.x += (gs->world.w->tile_dim_meters.x/2 - low->dim_meters.x/2);
+      //pp_fixup.offset.y += gs->world.w->tile_dim_meters.y/2;
+      //pp_fixup = canonicalize_position(gs->world.w, pp_fixup);
       rend_push_tile_alpha(gs, 4, pp_fixup, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
     } else {
       rend_push_tile_alpha(gs, 1, low->p, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
