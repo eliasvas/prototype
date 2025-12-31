@@ -63,7 +63,9 @@ typedef struct {
 World_Position canonicalize_position(World *tm, World_Position pos);
 v2 get_world_fpos_in_meters(World *tm, World_Position pos);
 World_Chunk *get_world_chunk_arena(World *tm, iv2 chunk_coords, Arena *arena);
+World_Chunk *get_world_chunk(World *w, iv2 chunk_coords);
 World_Position chunk_pos_from_tile_pos(World *w, iv2 abs_tile);
 b32 are_in_same_chunk(World *w, World_Position a, World_Position b);
+void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Position *old, World_Position *new);
 
 #endif

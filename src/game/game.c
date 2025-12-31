@@ -7,14 +7,6 @@
 
 void rend_push_tile_alpha(Game_State *gs, u32 atlas_idx, World_Position tile, World_Position camera, v2 dim_px, f32 alpha) {
   // Make a World_Position w/ the needed coordinates relative to 'camera' World_Position
-  /*
-  World_Position relative_tp = tile;
-  relative_tp.chunk.x -= camera.chunk.x;
-  relative_tp.chunk.y -= camera.chunk.y;
-  relative_tp.offset.x -= camera.offset.x;
-  relative_tp.offset.y -= camera.offset.y;
-  relative_tp = canonicalize_position(gs->world.w, relative_tp);
-  */
 
   // Calculate on-screen coords
   v2 m2p = v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters);
@@ -165,31 +157,32 @@ static World_Position map_fpos_to_tile_map_position(World *w, World_Position pos
   return base;
 }
 
-u32 add_player(Game_State *gs) {
-  u32 low_entity_idx = add_entity(gs, ENTITY_KIND_PLAYER);
-  Entity player_entity = get_high_entity(gs, low_entity_idx);
+u32 add_low_entity(Game_State *gs, Entity_Kind kind, World_Position p) {
+  u32 low_entity_idx = add_entity(gs, kind);
+  Low_Entity *low = get_low_entity(gs, low_entity_idx);
+  low->kind = kind;
+  low->p = p;
+  low->exists = true;
 
-  // Should this be a nil entity and we check??
-  *(player_entity.low) = (Low_Entity) {
-    .exists = true,
-    .kind = ENTITY_KIND_PLAYER,
-    .p = chunk_pos_from_tile_pos(gs->world.w, iv2m(2,2)),
-    .dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.75),
-  };
+  // TODO: Add an arena just for the game (gs->game_arena) 
+  change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, nullptr, &low->p);
+
+  return low_entity_idx;
+}
+
+u32 add_player(Game_State *gs) {
+  u32 low_entity_idx = add_low_entity(gs, ENTITY_KIND_PLAYER, chunk_pos_from_tile_pos(gs->world.w, iv2m(2,2)));
+  Entity player_entity = get_high_entity(gs, low_entity_idx);
+  player_entity.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.75);
 
   return low_entity_idx;
 }
 
 u32 add_wall(Game_State *gs, iv2 tile_pos) {
-  u32 low_entity_idx = add_entity(gs, ENTITY_KIND_WALL);
+  u32 low_entity_idx = add_low_entity(gs, ENTITY_KIND_WALL, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
 
   Low_Entity *low = get_low_entity(gs, low_entity_idx);
-  *low = (Low_Entity) {
-    .exists = true,
-    .kind = ENTITY_KIND_WALL,
-    .p = chunk_pos_from_tile_pos(gs->world.w, tile_pos),
-    .dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0),
-  };
+  low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0);
 
   return low_entity_idx;
 }
@@ -206,11 +199,51 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
     High_Entity *high = &gs->high_entities[high_entity_idx];
     high->p = v2_add(high->p, cam_diff_mt);
   }
+
+
   // Then, cull all entities outside camera bounding box - make them low!
   // Or add them to high entities if they ARE inside the bounding box but low
   s32 screens_to_include = 1;
   v2 camera_p_in_ws = get_world_fpos_in_meters(gs->world.w, gs->world.camera_p);
   rect camera_bounding_box = rec_centered(camera_p_in_ws, v2_multf(v2m(gs->world.screen_dim_in_tiles.x, gs->world.screen_dim_in_tiles.y), screens_to_include));
+
+#if 1
+  World_Position camera_bottom = gs->world.camera_p;
+  camera_bottom.offset = v2_sub(camera_bottom.offset, v2_multf(v2m(gs->world.screen_dim_in_tiles.x, gs->world.screen_dim_in_tiles.y), screens_to_include * gs->world.w->tile_dim_meters.x));
+  camera_bottom = canonicalize_position(gs->world.w, camera_bottom);
+
+  World_Position camera_top = gs->world.camera_p;
+  camera_top.offset = v2_add(camera_top.offset, v2_multf(v2m(gs->world.screen_dim_in_tiles.x, gs->world.screen_dim_in_tiles.y), screens_to_include * gs->world.w->tile_dim_meters.x));
+  camera_top = canonicalize_position(gs->world.w, camera_top);
+
+  assert(camera_bottom.chunk.x <= camera_top.chunk.x);
+  assert(camera_bottom.chunk.y <= camera_top.chunk.y);
+  for (s32 chunk_x = camera_bottom.chunk.x; chunk_x <= camera_top.chunk.x; chunk_x += 1) {
+    for (s32 chunk_y = camera_bottom.chunk.y; chunk_y <= camera_top.chunk.y; chunk_y += 1) {
+      World_Chunk *chunk = get_world_chunk_arena(gs->world.w, iv2m(chunk_x, chunk_y), gs->persistent_arena);
+      for (World_Entity_Block *block = chunk->first; block != nullptr; block = block->next) {
+        for (u32 block_entity_idx = 0; block_entity_idx < block->count; block_entity_idx+=1) {
+          u32 low_entity_idx = block->low_entity_indices[block_entity_idx];
+          Low_Entity *low_entity = get_low_entity(gs, low_entity_idx);
+
+          v2 entity_fpos = get_world_fpos_in_meters(gs->world.w, low_entity->p);
+          rect entity_bounding_box = rec_centered(entity_fpos, v2_multf(low_entity->dim_meters, 0.5));
+
+          if (!rect_isect_rect(camera_bounding_box, entity_bounding_box)) {
+            if (low_entity->high_entity_idx) {
+              make_entity_low_freq(gs, low_entity_idx);
+            }
+          } else {
+            if (low_entity->high_entity_idx == 0) {
+              make_entity_high_freq(gs, low_entity_idx);
+            }
+          }
+        }
+      }
+    }
+  }
+#else 
+  // TODO: only use the chunks intersecting the camera
   for (u32 low_entity_idx = 1; low_entity_idx < gs->low_entity_count; ++low_entity_idx) {
     Low_Entity *low_entity = get_low_entity(gs, low_entity_idx);
 
@@ -227,6 +260,8 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
       }
     }
   }
+#endif
+
 }
 
 void move_player(Game_State *gs, u64 player_low_entity_idx, f32 dt) {
@@ -248,13 +283,13 @@ void move_player(Game_State *gs, u64 player_low_entity_idx, f32 dt) {
       High_Entity *high = &gs->high_entities[high_entity_idx];
       if (high->low_entity_idx != gs->player_low_entity_idx) {
         v2 player_new_pos = v2_add(get_world_fpos_in_meters(gs->world.w, player.low->p), player_dp);
-        v2 player_new_pos_left = v2_add(v2_add(get_world_fpos_in_meters(gs->world.w, player.low->p), v2m(player.low->dim_meters.x/2,0)), player_dp);
-        v2 player_new_pos_right = v2_add(v2_sub(get_world_fpos_in_meters(gs->world.w, player.low->p), v2m(player.low->dim_meters.x/2,0)), player_dp);
+        v2 player_new_pos_left = v2_sub(player_new_pos, v2m(player.low->dim_meters.x/2,0));
+        v2 player_new_pos_right = v2_add(player_new_pos, v2m(player.low->dim_meters.x/2,0));
 
         Entity entity = get_high_entity(gs, high->low_entity_idx);
         v2 entity_pos_meters = get_world_fpos_in_meters(gs->world.w, entity.low->p);
         v2 entity_dim_mt = entity.low->dim_meters;
-        rect entity_collision_rect = rec_centered(entity_pos_meters, v2_multf(entity_dim_mt,0.5));
+        rect entity_collision_rect = rec(entity_pos_meters.x, entity_pos_meters.y, entity_dim_mt.x, entity_dim_mt.y);
         if (!collides) {
           collides = (rect_isect_point(entity_collision_rect, player_new_pos) ||
                      rect_isect_point(entity_collision_rect, player_new_pos_left) ||
@@ -268,9 +303,10 @@ void move_player(Game_State *gs, u64 player_low_entity_idx, f32 dt) {
     // If there is no collision map the new player position back to the low entity
     if (!collides) {
       player.high->p = v2_add(player.high->p, player_dp);
-      player.low->p = map_fpos_to_tile_map_position(gs->world.w, gs->world.camera_p, player_dp);
+      World_Position new_player_wpos = map_fpos_to_tile_map_position(gs->world.w, gs->world.camera_p, player_dp);
+      change_entity_location(gs->persistent_arena, gs->world.w, player_low_entity_idx, &player.low->p, &new_player_wpos);
+      player.low->p = new_player_wpos;
     }
-
 
   }
 
@@ -287,6 +323,7 @@ void game_init(Game_State *gs) {
       .tiles_per_chunk = 16,
   };
   gs->world.w->chunk_dim_meters = v2_multf(gs->world.w->tile_dim_meters, gs->world.w->tiles_per_chunk);
+  printf("chunk dim: %f\n", gs->world.w->chunk_dim_meters.x);
   M_ZERO_STRUCT(gs->world.w->chunk_slots);
 
   
@@ -457,11 +494,11 @@ void game_render(Game_State *gs, float dt) {
     Low_Entity *low = get_low_entity(gs, low_entity_idx);
     // If its the player also render the tile vizualization thingy
     if (low_entity_idx == gs->player_low_entity_idx) {
-      // Position of the player (only chunk/tile, no tile-offset)
-      World_Position player_tile_wp = low->p;
-      player_tile_wp.offset.x -= mod_f32(player_tile_wp.offset.x, gs->world.w->tile_dim_meters.x);
-      player_tile_wp.offset.y -= mod_f32(player_tile_wp.offset.y, gs->world.w->tile_dim_meters.y);
-      rend_push_tile(gs, 98, player_tile_wp, gs->world.camera_p, gs->world.w->tile_dim_px);
+      World_Position tile_wp = chunk_pos_from_tile_pos(gs->world.w, iv2m(
+            (low->p.chunk.x * gs->world.w->tiles_per_chunk + low->p.offset.x / gs->world.w->tile_dim_meters.x + gs->world.w->tiles_per_chunk/2),
+            (low->p.chunk.y * gs->world.w->tiles_per_chunk + low->p.offset.y / gs->world.w->tile_dim_meters.y + gs->world.w->tiles_per_chunk/2)
+      ));
+      rend_push_tile(gs, 98, tile_wp, gs->world.camera_p, gs->world.w->tile_dim_px);
     }
 
     // Render the enitites (for players, entity 
@@ -469,10 +506,7 @@ void game_render(Game_State *gs, float dt) {
     // so we fixup a bit)
     if (low->kind == ENTITY_KIND_PLAYER) {
       World_Position pp_fixup = low->p;
-      // FIXME FIXME FIXME offset for player is not correct!!!
-      //pp_fixup.offset.x += (gs->world.w->tile_dim_meters.x/2 - low->dim_meters.x/2);
-      //pp_fixup.offset.y += gs->world.w->tile_dim_meters.y/2;
-      //pp_fixup = canonicalize_position(gs->world.w, pp_fixup);
+      pp_fixup.offset.x -= low->dim_meters.x/2;
       rend_push_tile_alpha(gs, 4, pp_fixup, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
     } else {
       rend_push_tile_alpha(gs, 1, low->p, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
@@ -482,10 +516,40 @@ void game_render(Game_State *gs, float dt) {
   // ..
   // ..
   // In the end, perform a UI pass (TBA)
+  // Right now: Print debug player info stuff
   gui_frame_begin(gs->screen_dim, &gs->input, &gs->cmd_list, dt);
-  gui_set_next_bg_color(col(0.1, 0.2, 0.4, 0.5));
-  Gui_Signal bs = gui_button(MAKE_STR("Exit"));
-  if (bs.flags & GUI_SIGNAL_FLAG_LMB_PRESSED)printf("Exit pressed!\n");
+
+	gui_set_next_child_layout_axis(GUI_AXIS_X);
+  gui_set_next_pref_height((Gui_Size){GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+  gui_set_next_pref_width((Gui_Size){GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+  Gui_Signal debug_pane = gui_pane(MAKE_STR("Main_Pane"));
+  gui_push_parent(debug_pane.box);
+  {
+    gui_set_next_bg_color(col(0.1, 0.2, 0.4, 0.5));
+    gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
+    gui_set_next_pref_width((Gui_Size){GUI_SIZE_KIND_TEXT_CONTENT, 10.0, 1.0});
+    gui_set_next_text_color(col(0.7, 0.8, 0.1, 0.9));
+    Low_Entity *low = get_low_entity(gs, gs->player_low_entity_idx);
+    buf player_info = arena_sprintf(gs->frame_arena, "low_p: chunk(%d,%d), offset(%f, %f)", low->p.chunk.x, low->p.chunk.y, low->p.offset.x, low->p.offset.y);
+    gui_label(player_info);
+  }
+  gui_pop_parent();
+
+	gui_set_next_child_layout_axis(GUI_AXIS_X);
+  gui_set_next_pref_height((Gui_Size){GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+  gui_set_next_pref_width((Gui_Size){GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+  Gui_Signal debug_pane2 = gui_pane(MAKE_STR("Main_Pane2"));
+  {
+    gui_push_parent(debug_pane2.box);
+    gui_set_next_bg_color(col(0.3, 0.1, 0.7, 0.5));
+    gui_set_next_text_color(col(0.7, 0.8, 0.1, 0.9));
+    gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
+    gui_set_next_pref_width((Gui_Size){GUI_SIZE_KIND_TEXT_CONTENT, 10.0, 1.0});
+    buf high_entity_info = arena_sprintf(gs->frame_arena, "high entity count: %d", gs->high_entity_count);
+    gui_label(high_entity_info);
+  }
+  gui_pop_parent();
+  //--------------
   gui_frame_end();
 }
 

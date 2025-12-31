@@ -777,10 +777,7 @@ Gui_Signal gui_button(buf s) {
 }
 
 Gui_Signal gui_label(buf s) {
-	Gui_Box *w = gui_box_build_from_str( GB_FLAG_DRAW_TEXT |
-									GB_FLAG_DRAW_BACKGROUND |
-									GB_FLAG_DRAW_HOT_ANIMATION,
-									s);
+	Gui_Box *w = gui_box_build_from_str( GB_FLAG_DRAW_TEXT | GB_FLAG_DRAW_BACKGROUND | GB_FLAG_DRAW_HOT_ANIMATION, s);
 	Gui_Signal signal = gui_get_signal_for_box(w);
 	return signal;
 }

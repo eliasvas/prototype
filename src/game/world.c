@@ -38,12 +38,23 @@ World_Position canonicalize_position(World *w, World_Position pos) {
    {
     // For x-axis
     f32 chunk_offset = pos.offset.x; 
-    s32 extra_tiles = round_f32((f32)chunk_offset / w->tile_dim_meters.x); 
-    s32 extra_chunks = extra_tiles / w->tiles_per_chunk;
+    s32 extra_chunks = round_f32((f32)chunk_offset / w->chunk_dim_meters.x); 
     p.chunk.x += extra_chunks; // add to chunk_pos the extra offset
     p.offset.x = chunk_offset - w->tile_dim_meters.x * extra_chunks * w->tiles_per_chunk;
   }
 
+   {
+    // For y-axis
+    f32 chunk_offset = pos.offset.y; 
+    s32 extra_chunks = round_f32((f32)chunk_offset / w->chunk_dim_meters.y); 
+    p.chunk.y += extra_chunks; // add to chunk_pos the extra offset
+    p.offset.y = chunk_offset - w->tile_dim_meters.y * extra_chunks * w->tiles_per_chunk;
+  }
+
+
+
+
+#if 0
   {
     // For y-axis
     f32 chunk_offset = pos.offset.y; 
@@ -52,6 +63,7 @@ World_Position canonicalize_position(World *w, World_Position pos) {
     p.chunk.y += extra_chunks; // add to chunk_pos the extra offset
     p.offset.y = chunk_offset - w->tile_dim_meters.y * extra_chunks * w->tiles_per_chunk;
   }
+#endif
 
   return p;
 }
@@ -91,14 +103,14 @@ b32 are_in_same_chunk(World *w, World_Position a, World_Position b) {
   return(result);
 }
 
-World_Position chunk_pos_from_tile_pos(World *w, iv2 abs_tile) {
+World_Position chunk_pos_from_tile_pos(World *w, iv2 tile_pos) {
   World_Position pos = {};
 
-  pos.chunk.x = abs_tile.x / w->tiles_per_chunk;
-  pos.chunk.y = abs_tile.y / w->tiles_per_chunk;
+  pos.chunk.x = tile_pos.x / w->tiles_per_chunk;
+  pos.chunk.y = tile_pos.y / w->tiles_per_chunk;
 
-  pos.offset.x = (f32)(abs_tile.x - (pos.chunk.x*w->tiles_per_chunk)) * w->tile_dim_meters.x;
-  pos.offset.y = (f32)(abs_tile.y - (pos.chunk.y*w->tiles_per_chunk)) * w->tile_dim_meters.y;
+  pos.offset.x = (f32)(tile_pos.x - (pos.chunk.x*w->tiles_per_chunk)) * w->tile_dim_meters.x - w->chunk_dim_meters.x/2;
+  pos.offset.y = (f32)(tile_pos.y - (pos.chunk.y*w->tiles_per_chunk)) * w->tile_dim_meters.y - w->chunk_dim_meters.y/2;
 
   return (pos);
 }
@@ -107,12 +119,12 @@ void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Po
   // 0. If there was a block and its on different chunk, remove it
   if (old) {
     if (!are_in_same_chunk(w, *old, *new)) {
-
       World_Chunk *chunk = get_world_chunk(w, old->chunk);
       if (chunk) {
+        b32 not_found = true;
         // 1. Search to find the specific low_entity_idx 
-        for (World_Entity_Block *block = chunk->first; block != nullptr; block = block->next) {
-          for (u32 entity_itr = 0; entity_itr < block->count; entity_itr +=1) {
+        for (World_Entity_Block *block = chunk->first; block != nullptr && not_found; block = block->next) {
+          for (u32 entity_itr = 0; entity_itr < block->count && not_found; entity_itr +=1) {
             // 2. if found remove it!
             if (block->low_entity_indices[entity_itr] == low_entity_idx) {
               block->low_entity_indices[entity_itr] = block->low_entity_indices[--block->count];
@@ -125,8 +137,7 @@ void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Po
                   w->block_freelist = free_block;
               }
               // double break to exit iteration
-              block = nullptr;
-              break;
+              not_found = true;
             }
           }
         }
@@ -135,7 +146,7 @@ void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Po
   }
 
   // 4. Map the new block to the correct chunk now
-  World_Chunk *chunk = get_world_chunk(w, new->chunk);
+  World_Chunk *chunk = get_world_chunk_arena(w, new->chunk, arena);
   World_Entity_Block *block = chunk->first;
   if (!block || block->count == block->cap) {
     World_Entity_Block *new_block = w->block_freelist;
@@ -147,7 +158,9 @@ void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Po
     M_ZERO_STRUCT(new_block);
     new_block->cap = array_count(new_block->low_entity_indices);
     dll_push_back(chunk->first, chunk->last, new_block);
+    block = new_block;
   }
+  assert(block);
   block->low_entity_indices[block->count++] = low_entity_idx;
 
 }
