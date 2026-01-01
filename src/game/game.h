@@ -9,6 +9,8 @@ typedef enum {
   ENTITY_KIND_NIL,
   ENTITY_KIND_PLAYER,
   ENTITY_KIND_WALL,
+  ENTITY_KIND_FAMILIAR,
+  ENTITY_KIND_MONSTER,
 } Entity_Kind;
 
 typedef struct {
@@ -18,7 +20,7 @@ typedef struct {
 } High_Entity;
 
 typedef struct {
-  b32 exists;
+  b32 collides;
   Entity_Kind kind;
   World_Position p;
   v2 delta_p;
@@ -33,6 +35,12 @@ typedef struct {
 
   u32 low_entity_idx;
 } Entity;
+
+typedef struct {
+  u32 entity_idx; // the low entity idx
+  Low_Entity *low;
+} Low_Entity_Result;
+
 
 
 typedef struct {
@@ -66,7 +74,6 @@ typedef struct {
 
   // Game specific stuff
   Game_World world;
-  u64 entity_count;
 
   u64 high_entity_count;
   High_Entity high_entities[256];

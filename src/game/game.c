@@ -98,6 +98,18 @@ void make_entity_low_freq(Game_State *gs, u32 low_entity_idx) {
 }
  
 
+Entity entity_from_high_entity(Game_State *gs, u64 high_entity_idx) {
+  Entity entity = {};
+
+  if (high_entity_idx) {
+    entity.high = &gs->high_entities[high_entity_idx];
+    entity.low_entity_idx = entity.high->low_entity_idx;
+    entity.low = &gs->low_entities[entity.low_entity_idx];
+  }
+
+  return entity;
+}
+
 Low_Entity *get_low_entity(Game_State *gs, u64 low_entity_idx) {
   Low_Entity *low = 0;
 
@@ -131,8 +143,8 @@ u64 add_entity(Game_State *gs, Entity_Kind kind) {
   u64 low_entity_idx = 0;
   // Make the nil entity first
   if (gs->low_entity_count == 0) {
-    gs->high_entities[gs->entity_count] = (High_Entity){};
-    gs->low_entities[gs->entity_count] = (Low_Entity){};
+    gs->high_entities[gs->high_entity_count] = (High_Entity){};
+    gs->low_entities[gs->low_entity_count] = (Low_Entity){};
 
     gs->low_entity_count += 1;
     gs->high_entity_count += 1;
@@ -157,34 +169,52 @@ static World_Position map_fpos_to_tile_map_position(World *w, World_Position pos
   return base;
 }
 
-u32 add_low_entity(Game_State *gs, Entity_Kind kind, World_Position p) {
+Low_Entity_Result add_low_entity(Game_State *gs, Entity_Kind kind, World_Position p) {
+  Low_Entity_Result res = {};
   u32 low_entity_idx = add_entity(gs, kind);
   Low_Entity *low = get_low_entity(gs, low_entity_idx);
   low->kind = kind;
   low->p = p;
-  low->exists = true;
+  low->collides = true;
+
 
   // TODO: Add an arena just for the game (gs->game_arena) 
   change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, nullptr, &low->p);
 
-  return low_entity_idx;
+  res.entity_idx = low_entity_idx;
+  res.low = low;
+
+  return res;
 }
 
-u32 add_player(Game_State *gs) {
-  u32 low_entity_idx = add_low_entity(gs, ENTITY_KIND_PLAYER, chunk_pos_from_tile_pos(gs->world.w, iv2m(2,2)));
-  Entity player_entity = get_high_entity(gs, low_entity_idx);
+Low_Entity_Result add_player(Game_State *gs) {
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_PLAYER, chunk_pos_from_tile_pos(gs->world.w, iv2m(2,2)));
+  Entity player_entity = get_high_entity(gs, low.entity_idx);
   player_entity.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.75);
 
-  return low_entity_idx;
+  return low;
 }
 
-u32 add_wall(Game_State *gs, iv2 tile_pos) {
-  u32 low_entity_idx = add_low_entity(gs, ENTITY_KIND_WALL, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
+Low_Entity_Result add_wall(Game_State *gs, iv2 tile_pos) {
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_WALL, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
+  low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0);
 
-  Low_Entity *low = get_low_entity(gs, low_entity_idx);
-  low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0);
+  return low;
+}
 
-  return low_entity_idx;
+Low_Entity_Result add_familiar(Game_State *gs, iv2 tile_pos) {
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_FAMILIAR, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
+  low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.5);
+  low.low->collides = false;
+
+  return low;
+}
+
+Low_Entity_Result add_monster(Game_State *gs, iv2 tile_pos) {
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_MONSTER, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
+  low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0);
+
+  return low;
 }
 
 void set_camera(Game_State *gs, World_Position new_camera_pos) {
@@ -264,53 +294,81 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
 
 }
 
-void move_player(Game_State *gs, u64 player_low_entity_idx, f32 dt) {
-  Entity player = get_high_entity(gs, player_low_entity_idx);
+
+void move_entity(Game_State *gs, u64 low_entity_idx, v2 dp, f32 dt) {
+  Entity entity = get_high_entity(gs, low_entity_idx);
 
   if (true) {
-    // Move + Draw the hero
-    f32 hero_speed = 15.0;
-    Input *input = &gs->input;
-    v2 player_dp = v2m(0,0);
-    if (input_key_down(input, KEY_SCANCODE_UP))player_dp.y+=hero_speed*dt;
-    if (input_key_down(input, KEY_SCANCODE_DOWN))player_dp.y-=hero_speed*dt;
-    if (input_key_down(input, KEY_SCANCODE_LEFT))player_dp.x-=hero_speed*dt;
-    if (input_key_down(input, KEY_SCANCODE_RIGHT))player_dp.x+=hero_speed*dt;
-
-    // Check for player/tile collisions
+    // Check for entity/tile collisions
     b32 collides = false;
     for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; ++high_entity_idx) {
       High_Entity *high = &gs->high_entities[high_entity_idx];
-      if (high->low_entity_idx != gs->player_low_entity_idx) {
-        v2 player_new_pos = v2_add(get_world_fpos_in_meters(gs->world.w, player.low->p), player_dp);
-        v2 player_new_pos_left = v2_sub(player_new_pos, v2m(player.low->dim_meters.x/2,0));
-        v2 player_new_pos_right = v2_add(player_new_pos, v2m(player.low->dim_meters.x/2,0));
+      if (high->low_entity_idx != low_entity_idx && entity_from_high_entity(gs, high_entity_idx).low->collides) {
+        v2 entity_new_pos = v2_add(get_world_fpos_in_meters(gs->world.w, entity.low->p), dp);
+        v2 entity_new_pos_left = v2_sub(entity_new_pos, v2m(entity.low->dim_meters.x/2,0));
+        v2 entity_new_pos_right = v2_add(entity_new_pos, v2m(entity.low->dim_meters.x/2,0));
 
         Entity entity = get_high_entity(gs, high->low_entity_idx);
         v2 entity_pos_meters = get_world_fpos_in_meters(gs->world.w, entity.low->p);
         v2 entity_dim_mt = entity.low->dim_meters;
         rect entity_collision_rect = rec(entity_pos_meters.x, entity_pos_meters.y, entity_dim_mt.x, entity_dim_mt.y);
         if (!collides) {
-          collides = (rect_isect_point(entity_collision_rect, player_new_pos) ||
-                     rect_isect_point(entity_collision_rect, player_new_pos_left) ||
-                     rect_isect_point(entity_collision_rect, player_new_pos_right));
-          //if (collides) { printf("collision succeded with rect %f %f %f %f and pos %f %f\n", entity_pos_meters.x, entity_pos_meters.y, tile_dim_mt.x, tile_dim_mt.y, player_dp.x, player_dp.y); }
+          collides = (rect_isect_point(entity_collision_rect, entity_new_pos) ||
+                     rect_isect_point(entity_collision_rect, entity_new_pos_left) ||
+                     rect_isect_point(entity_collision_rect, entity_new_pos_right));
+          //if (collides) { printf("collision succeded with rect %f %f %f %f and pos %f %f\n", entity_pos_meters.x, entity_pos_meters.y, tile_dim_mt.x, tile_dim_mt.y, dp.x, dp.y); }
         }
       }
     }
  
 
-    // If there is no collision map the new player position back to the low entity
+    // If there is no collision map the new entity position back to the low entity
     if (!collides) {
-      player.high->p = v2_add(player.high->p, player_dp);
-      World_Position new_player_wpos = map_fpos_to_tile_map_position(gs->world.w, gs->world.camera_p, player_dp);
-      change_entity_location(gs->persistent_arena, gs->world.w, player_low_entity_idx, &player.low->p, &new_player_wpos);
-      player.low->p = new_player_wpos;
+      entity.high->p = v2_add(entity.high->p, dp);
+      World_Position new_entity_wpos = map_fpos_to_tile_map_position(gs->world.w, gs->world.camera_p, dp);
+      change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, &entity.low->p, &new_entity_wpos);
+      entity.low->p = new_entity_wpos;
     }
 
   }
 
 }
+
+void update_familiar(Game_State *gs, Entity entity, f32 dt) {
+  assert(entity.low->kind == ENTITY_KIND_FAMILIAR);
+  for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; ++high_entity_idx) {
+    Entity test_entity = entity_from_high_entity(gs, high_entity_idx);
+
+    if (test_entity.low->kind == ENTITY_KIND_PLAYER) {
+      v2 distance = v2_sub(entity.high->p, test_entity.high->p);
+      if (v2_len(distance) < 100) {
+        f32 familiar_speed = 1.0;
+        v2 dp = v2_multf(v2_norm(distance), familiar_speed);
+        move_entity(gs, entity.low_entity_idx, dp, dt);
+      }
+    }
+  }
+}
+
+void update_monster(Game_State *gs, Entity entity, f32 dt) {
+  assert(entity.low->kind == ENTITY_KIND_MONSTER);
+  // TBA
+}
+
+void update_hero(Game_State *gs, Entity entity, f32 dt) {
+  assert(entity.low->kind == ENTITY_KIND_PLAYER);
+  f32 hero_speed = 15.0;
+  Input *input = &gs->input;
+  v2 dp = v2m(0,0);
+  if (input_key_down(input, KEY_SCANCODE_UP))dp.y+=hero_speed*dt;
+  if (input_key_down(input, KEY_SCANCODE_DOWN))dp.y-=hero_speed*dt;
+  if (input_key_down(input, KEY_SCANCODE_LEFT))dp.x-=hero_speed*dt;
+  if (input_key_down(input, KEY_SCANCODE_RIGHT))dp.x+=hero_speed*dt;
+
+  move_entity(gs, entity.low_entity_idx, dp, dt);
+}
+
+
 
 void game_init(Game_State *gs) {
 
@@ -323,7 +381,6 @@ void game_init(Game_State *gs) {
       .tiles_per_chunk = 16,
   };
   gs->world.w->chunk_dim_meters = v2_multf(gs->world.w->tile_dim_meters, gs->world.w->tiles_per_chunk);
-  printf("chunk dim: %f\n", gs->world.w->chunk_dim_meters.x);
   M_ZERO_STRUCT(gs->world.w->chunk_slots);
 
   
@@ -386,7 +443,9 @@ void game_init(Game_State *gs) {
     }
   }
 
-  gs->player_low_entity_idx = add_player(gs);
+  gs->player_low_entity_idx = add_player(gs).entity_idx;
+  add_monster(gs, iv2m(4,4));
+  add_familiar(gs, iv2m(2,4));
 }
 
 void game_update(Game_State *gs, float dt) {
@@ -438,11 +497,45 @@ void game_update(Game_State *gs, float dt) {
   Entity camera = get_high_entity(gs, gs->player_low_entity_idx);
   set_camera(gs, camera.low->p);
 
+#if 0
   // Move the player
   if (!entity_idx_is_nil(gs->player_low_entity_idx)) {
-    move_player(gs, gs->player_low_entity_idx, dt);
-  }
 
+    f32 hero_speed = 15.0;
+    Input *input = &gs->input;
+    v2 dp = v2m(0,0);
+    if (input_key_down(input, KEY_SCANCODE_UP))dp.y+=hero_speed*dt;
+    if (input_key_down(input, KEY_SCANCODE_DOWN))dp.y-=hero_speed*dt;
+    if (input_key_down(input, KEY_SCANCODE_LEFT))dp.x-=hero_speed*dt;
+    if (input_key_down(input, KEY_SCANCODE_RIGHT))dp.x+=hero_speed*dt;
+
+
+    move_entity(gs, gs->player_low_entity_idx, dp, dt);
+
+  }
+#endif
+
+  // Update all the entities!!
+  for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; ++high_entity_idx) {
+    Entity entity = entity_from_high_entity(gs, high_entity_idx);
+    switch (entity.low->kind) {
+      case ENTITY_KIND_PLAYER: {
+        update_hero(gs, entity, dt);
+      }break;
+      case ENTITY_KIND_MONSTER: {
+        update_monster(gs, entity, dt);
+      }break;
+      case ENTITY_KIND_FAMILIAR: {
+        update_familiar(gs, entity, dt);
+      }break;
+      case ENTITY_KIND_WALL: {
+      }break;
+      case ENTITY_KIND_NIL: {
+        // Nothing
+      }break;
+      default: break;
+    }
+  }
 }
 
 
@@ -504,13 +597,22 @@ void game_render(Game_State *gs, float dt) {
     // Render the enitites (for players, entity 
     // position is actually the halfway-x bottom-y point,
     // so we fixup a bit)
-    if (low->kind == ENTITY_KIND_PLAYER) {
-      World_Position pp_fixup = low->p;
-      pp_fixup.offset.x -= low->dim_meters.x/2;
-      rend_push_tile_alpha(gs, 4, pp_fixup, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
-    } else {
-      rend_push_tile_alpha(gs, 1, low->p, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
-    } 
+    switch (low->kind) {
+      case ENTITY_KIND_FAMILIAR:
+      case ENTITY_KIND_MONSTER:
+      case ENTITY_KIND_PLAYER: {
+        World_Position pp_fixup = low->p;
+        pp_fixup.offset.x -= low->dim_meters.x/2;
+        rend_push_tile_alpha(gs, 3+low->kind, pp_fixup, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
+      }break;
+      case ENTITY_KIND_WALL: {
+        rend_push_tile_alpha(gs, 1, low->p, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
+      }break;
+      case ENTITY_KIND_NIL: {
+        // Nothing
+      }break;
+      default: break;
+    }
   }
 
   // ..
