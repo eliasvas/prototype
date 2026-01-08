@@ -56,6 +56,15 @@ b32 entity_idx_is_nil(u64 entity_idx) {
   return (entity_idx == 0);
 }
 
+
+static World_Position map_fpos_to_tile_map_position(World *w, World_Position pos, v2 offset_fpos) {
+  World_Position base = pos;
+  base.offset = v2_add(base.offset, offset_fpos);
+
+  base = canonicalize_position(w, base);
+  return base;
+}
+
 High_Entity *make_entity_high_freq(Game_State *gs, u32 low_entity_idx) {
   High_Entity *high;
   Low_Entity *low = &gs->low_entities[low_entity_idx];
@@ -72,7 +81,7 @@ High_Entity *make_entity_high_freq(Game_State *gs, u32 low_entity_idx) {
     // We find the relative position for the entity and store it in the high_entity array 
     v2 entity_fpos = get_world_fpos_in_meters(gs->world.w, entity_pos);
     v2 camera_fpos = get_world_fpos_in_meters(gs->world.w, camera_pos);
-    v2 relative_fpos = v2_sub(camera_fpos, entity_fpos);
+    v2 relative_fpos = v2_sub(entity_fpos, camera_fpos);
     high->p = relative_fpos;
     high->low_entity_idx = low_entity_idx;
 
@@ -88,6 +97,11 @@ void make_entity_low_freq(Game_State *gs, u32 low_entity_idx) {
   if (high_entity_idx) {
     u32 last_high_idx = gs->high_entity_count - 1;
     if (high_entity_idx != last_high_idx) {
+      // save the current high position
+      High_Entity *high= &gs->high_entities[high_entity_idx];
+      World_Position wpos_to_save = map_fpos_to_tile_map_position(gs->world.w, high->p, 0);
+      low->p = wpos_to_save;
+      // remove the high entity
       u32 last_low_idx = gs->high_entities[last_high_idx].low_entity_idx;
       gs->high_entities[high_entity_idx] = gs->high_entities[last_high_idx];
       gs->low_entities[last_low_idx].high_entity_idx = high_entity_idx;
@@ -161,13 +175,6 @@ u64 add_entity(Game_State *gs, Entity_Kind kind) {
   return low_entity_idx;
 }
 
-static World_Position map_fpos_to_tile_map_position(World *w, World_Position pos, v2 offset_fpos) {
-  World_Position base = pos;
-  base.offset = v2_add(base.offset, offset_fpos);
-
-  base = canonicalize_position(w, base);
-  return base;
-}
 
 Low_Entity_Result add_low_entity(Game_State *gs, Entity_Kind kind, World_Position p) {
   Low_Entity_Result res = {};
@@ -221,15 +228,14 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
   // First, calculate the actual camera delta + set the new camera position
   v2 prev_cam_pos_mt = get_world_fpos_in_meters(gs->world.w, gs->world.camera_p);
   v2 new_cam_pos_mt = get_world_fpos_in_meters(gs->world.w, new_camera_pos);
-  v2 cam_diff_mt = v2_sub(prev_cam_pos_mt, new_cam_pos_mt);
+  v2 cam_diff_mt = v2_sub(new_cam_pos_mt, prev_cam_pos_mt);
   gs->world.camera_p = new_camera_pos;
 
   // Then, we fixup current High entities for the new camera delta
-  for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; ++high_entity_idx) {
+  for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; high_entity_idx+=1) {
     High_Entity *high = &gs->high_entities[high_entity_idx];
     high->p = v2_add(high->p, cam_diff_mt);
   }
-
 
   // Then, cull all entities outside camera bounding box - make them low!
   // Or add them to high entities if they ARE inside the bounding box but low
@@ -298,20 +304,21 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
 void move_entity(Game_State *gs, u64 low_entity_idx, v2 dp, f32 dt) {
   Entity entity = get_high_entity(gs, low_entity_idx);
 
-  if (true) {
-    // Check for entity/tile collisions
-    b32 collides = false;
+  // Check for entity/tile collisions
+  b32 collides = false;
+  if (entity.low->collides) {
     for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; ++high_entity_idx) {
-      High_Entity *high = &gs->high_entities[high_entity_idx];
-      if (high->low_entity_idx != low_entity_idx && entity_from_high_entity(gs, high_entity_idx).low->collides) {
-        v2 entity_new_pos = v2_add(get_world_fpos_in_meters(gs->world.w, entity.low->p), dp);
+      Entity test_entity = entity_from_high_entity(gs, high_entity_idx);
+      if (test_entity.low_entity_idx != low_entity_idx && test_entity.low->collides) {
+        //v2 entity_new_pos = v2_add(get_world_fpos_in_meters(gs->world.w, entity.low->p), dp);
+        v2 entity_new_pos = v2_add(entity.high->p, dp);
         v2 entity_new_pos_left = v2_sub(entity_new_pos, v2m(entity.low->dim_meters.x/2,0));
         v2 entity_new_pos_right = v2_add(entity_new_pos, v2m(entity.low->dim_meters.x/2,0));
 
-        Entity entity = get_high_entity(gs, high->low_entity_idx);
-        v2 entity_pos_meters = get_world_fpos_in_meters(gs->world.w, entity.low->p);
-        v2 entity_dim_mt = entity.low->dim_meters;
-        rect entity_collision_rect = rec(entity_pos_meters.x, entity_pos_meters.y, entity_dim_mt.x, entity_dim_mt.y);
+        //v2 test_entity_pos_meters = get_world_fpos_in_meters(gs->world.w, test_entity.low->p);
+        v2 test_entity_pos_meters = test_entity.high->p;
+        v2 test_entity_dim_mt = test_entity.low->dim_meters;
+        rect entity_collision_rect = rec(test_entity_pos_meters.x, test_entity_pos_meters.y, test_entity_dim_mt.x, test_entity_dim_mt.y);
         if (!collides) {
           collides = (rect_isect_point(entity_collision_rect, entity_new_pos) ||
                      rect_isect_point(entity_collision_rect, entity_new_pos_left) ||
@@ -320,34 +327,41 @@ void move_entity(Game_State *gs, u64 low_entity_idx, v2 dp, f32 dt) {
         }
       }
     }
- 
+  }
 
-    // If there is no collision map the new entity position back to the low entity
-    if (!collides) {
-      entity.high->p = v2_add(entity.high->p, dp);
-      World_Position new_entity_wpos = map_fpos_to_tile_map_position(gs->world.w, gs->world.camera_p, dp);
-      change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, &entity.low->p, &new_entity_wpos);
-      entity.low->p = new_entity_wpos;
-    }
-
+  // If there is no collision map the new entity position back to the low entity
+  if (!collides) {
+    entity.high->p = v2_add(entity.high->p, dp);
+    World_Position new_entity_wpos = map_fpos_to_tile_map_position(gs->world.w, entity.low->p, dp);
+    change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, &entity.low->p, &new_entity_wpos);
+    entity.low->p = new_entity_wpos;
   }
 
 }
 
 void update_familiar(Game_State *gs, Entity entity, f32 dt) {
   assert(entity.low->kind == ENTITY_KIND_FAMILIAR);
-  for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; ++high_entity_idx) {
+#if 1
+  for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; high_entity_idx+=1) {
     Entity test_entity = entity_from_high_entity(gs, high_entity_idx);
 
     if (test_entity.low->kind == ENTITY_KIND_PLAYER) {
-      v2 distance = v2_sub(entity.high->p, test_entity.high->p);
+      //printf("player pos: %f %f\n", test_entity.high->p.x, test_entity.high->p.y);
+      //printf("familiar pos: %f %f\n", entity.high->p.x, entity.high->p.y);
+      //v2 distance = v2_sub(entity.high->p, test_entity.high->p);
+      v2 distance = v2_sub(test_entity.high->p, entity.high->p);
       if (v2_len(distance) < 100) {
-        f32 familiar_speed = 1.0;
+        f32 familiar_speed = 0.1*dt;
         v2 dp = v2_multf(v2_norm(distance), familiar_speed);
         move_entity(gs, entity.low_entity_idx, dp, dt);
       }
     }
   }
+#else
+  if (entity.low->kind == ENTITY_KIND_FAMILIAR) {
+    move_entity(gs, entity.low_entity_idx, v2m(1 * dt,0), dt);
+  }
+#endif
 }
 
 void update_monster(Game_State *gs, Entity entity, f32 dt) {
@@ -357,6 +371,7 @@ void update_monster(Game_State *gs, Entity entity, f32 dt) {
 
 void update_hero(Game_State *gs, Entity entity, f32 dt) {
   assert(entity.low->kind == ENTITY_KIND_PLAYER);
+  printf("pos: %f %f\n", entity.high->p.x, entity.high->p.y);
   f32 hero_speed = 15.0;
   Input *input = &gs->input;
   v2 dp = v2m(0,0);
@@ -459,7 +474,7 @@ void game_update(Game_State *gs, float dt) {
   gs->game_viewport = rec(0,0,gs->screen_dim.x, gs->screen_dim.y);
   gs->world.lower_left_corner = v2m(0, gs->screen_dim.y);
 
-  /*
+#if 0
   // Audio test
   u32 sample_rate = 44100; 
   u32 num_seconds = 4;
@@ -478,7 +493,7 @@ void game_update(Game_State *gs, float dt) {
   }
 
   assert(write_sample_wav_file("build/hello.wav", wdata, num_samples * sizeof(wdata[0]), num_channels, sample_rate, sizeof(wdata[0])*8)); 
-  */
+#endif
 
   // Another audio test -- real time (!!)
   // TODO: This is enough backend to make an audio mixer - do it

@@ -42,10 +42,10 @@ static b32 write_sample_wav_file(const char *filename, void *data, u32 data_size
     return false;
   }
   Wav_Header wheader = (Wav_Header) {
-    .chunk_id = "RIFF",
+    .chunk_id = {0x52, 0x49, 0x46, 0x46}, // "RIFF"
     .chunk_size = data_size_in_bytes + 36,
-    .format = "WAVE",
-    .subchunk1_id = "fmt ",
+    .format = {0x57, 0x41, 0x56, 0x45}, // "WAVE"
+    .subchunk1_id = {0x66, 0x6D, 0x74, 0x20}, // "fmt "
     .subchunk1_size = 16,
     .audio_format = 1,
     .num_channels = num_channels,
@@ -53,7 +53,7 @@ static b32 write_sample_wav_file(const char *filename, void *data, u32 data_size
     .byte_rate = sample_rate * num_channels * bits_per_sample / 8,
     .block_align = num_channels * bits_per_sample / 8,
     .bits_per_sample = bits_per_sample,
-    .subchunk2_id = "data",
+    .subchunk2_id = {0x64, 0x61, 0x74, 0x61}, // "data"
     .subchunk2_size = data_size_in_bytes,
   };
   fwrite(&wheader,sizeof(Wav_Header), 1, file);
