@@ -112,7 +112,7 @@ typedef struct {
   void *lib;
   s64 last_modified;
 
-  u64 api_version;
+ u64 api_version;
 } Game_Api;
 
 #endif

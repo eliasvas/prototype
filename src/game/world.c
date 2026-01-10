@@ -38,7 +38,7 @@ World_Position canonicalize_position(World *w, World_Position pos) {
    {
     // For x-axis
     f32 chunk_offset = pos.offset.x; 
-    s32 extra_chunks = round_f32((f32)chunk_offset / w->chunk_dim_meters.x); 
+    s32 extra_chunks = floor_f32((f32)chunk_offset / w->chunk_dim_meters.x); 
     p.chunk.x += extra_chunks; // add to chunk_pos the extra offset
     p.offset.x = chunk_offset - w->tile_dim_meters.x * extra_chunks * w->tiles_per_chunk;
   }
@@ -46,24 +46,10 @@ World_Position canonicalize_position(World *w, World_Position pos) {
    {
     // For y-axis
     f32 chunk_offset = pos.offset.y; 
-    s32 extra_chunks = round_f32((f32)chunk_offset / w->chunk_dim_meters.y); 
+    s32 extra_chunks = floor_f32((f32)chunk_offset / w->chunk_dim_meters.y); 
     p.chunk.y += extra_chunks; // add to chunk_pos the extra offset
     p.offset.y = chunk_offset - w->tile_dim_meters.y * extra_chunks * w->tiles_per_chunk;
   }
-
-
-
-
-#if 0
-  {
-    // For y-axis
-    f32 chunk_offset = pos.offset.y; 
-    s32 extra_tiles = round_f32((f32)chunk_offset / w->tile_dim_meters.y); 
-    s32 extra_chunks = extra_tiles / w->tiles_per_chunk;
-    p.chunk.y += extra_chunks; // add to chunk_pos the extra offset
-    p.offset.y = chunk_offset - w->tile_dim_meters.y * extra_chunks * w->tiles_per_chunk;
-  }
-#endif
 
   return p;
 }
@@ -103,14 +89,14 @@ b32 are_in_same_chunk(World *w, World_Position a, World_Position b) {
   return(result);
 }
 
-World_Position chunk_pos_from_tile_pos(World *w, iv2 tile_pos) {
+World_Position chunk_pos_from_tile_pos(World *w, v2 tile_pos) {
   World_Position pos = {};
 
   pos.chunk.x = tile_pos.x / w->tiles_per_chunk;
   pos.chunk.y = tile_pos.y / w->tiles_per_chunk;
 
-  pos.offset.x = (f32)(tile_pos.x - (pos.chunk.x*w->tiles_per_chunk)) * w->tile_dim_meters.x - w->chunk_dim_meters.x/2;
-  pos.offset.y = (f32)(tile_pos.y - (pos.chunk.y*w->tiles_per_chunk)) * w->tile_dim_meters.y - w->chunk_dim_meters.y/2;
+  pos.offset.x = (f32)(tile_pos.x - (pos.chunk.x*w->tiles_per_chunk)) * w->tile_dim_meters.x;
+  pos.offset.y = (f32)(tile_pos.y - (pos.chunk.y*w->tiles_per_chunk)) * w->tile_dim_meters.y;
 
   return (pos);
 }

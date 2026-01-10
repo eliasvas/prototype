@@ -76,11 +76,9 @@ High_Entity *make_entity_high_freq(Game_State *gs, u32 low_entity_idx) {
     high = &gs->high_entities[high_entity_idx];
 
     World_Position entity_pos = low->p;
-    World_Position camera_pos = gs->world.camera_p;
-
     // We find the relative position for the entity and store it in the high_entity array 
     v2 entity_fpos = get_world_fpos_in_meters(gs->world.w, entity_pos);
-    v2 camera_fpos = get_world_fpos_in_meters(gs->world.w, camera_pos);
+    v2 camera_fpos = get_world_fpos_in_meters(gs->world.w, gs->world.camera_p);
     v2 relative_fpos = v2_sub(entity_fpos, camera_fpos);
     high->p = relative_fpos;
     high->low_entity_idx = low_entity_idx;
@@ -93,14 +91,25 @@ High_Entity *make_entity_high_freq(Game_State *gs, u32 low_entity_idx) {
 void make_entity_low_freq(Game_State *gs, u32 low_entity_idx) {
   Low_Entity *low = &gs->low_entities[low_entity_idx];
   u32 high_entity_idx = low->high_entity_idx;
-  // If it has a high entity, we remove it.
+  // 0. If it has a high entity, we remove it.
   if (high_entity_idx) {
     u32 last_high_idx = gs->high_entity_count - 1;
+
+    // 1. save the current high position
+    High_Entity *high = &gs->high_entities[high_entity_idx];
+    v2 camera_fpos = get_world_fpos_in_meters(gs->world.w, gs->world.camera_p);
+    v2 high_fpos_mt = v2_add(camera_fpos, high->p);
+    //printf("prev: chunk[%u,%u] off[%f,%f]", low->p.chunk.x, low->p.chunk.y, low->p.offset.x, low->p.offset.y);
+    World_Position wpos_to_save = chunk_pos_from_tile_pos(gs->world.w, 
+        v2m(gs->world.w->tiles_per_chunk * high_fpos_mt.x / (float)gs->world.w->chunk_dim_meters.x,
+          gs->world.w->tiles_per_chunk * high_fpos_mt.y / (float)gs->world.w->chunk_dim_meters.y)
+    );
+    // WHY WHY WHY doesnt this work
+    low->p = wpos_to_save;
+
+    // 2. If its not the last perform a swap
     if (high_entity_idx != last_high_idx) {
-      // save the current high position
-      High_Entity *high= &gs->high_entities[high_entity_idx];
-      World_Position wpos_to_save = map_fpos_to_tile_map_position(gs->world.w, high->p, 0);
-      low->p = wpos_to_save;
+      //printf(" -- saved: chunk[%u,%u] off[%f,%f]\n", low->p.chunk.x, low->p.chunk.y, low->p.offset.x, low->p.offset.y);
       // remove the high entity
       u32 last_low_idx = gs->high_entities[last_high_idx].low_entity_idx;
       gs->high_entities[high_entity_idx] = gs->high_entities[last_high_idx];
@@ -195,21 +204,21 @@ Low_Entity_Result add_low_entity(Game_State *gs, Entity_Kind kind, World_Positio
 }
 
 Low_Entity_Result add_player(Game_State *gs) {
-  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_PLAYER, chunk_pos_from_tile_pos(gs->world.w, iv2m(2,2)));
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_PLAYER, chunk_pos_from_tile_pos(gs->world.w, v2m(2,2)));
   Entity player_entity = get_high_entity(gs, low.entity_idx);
   player_entity.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.75);
 
   return low;
 }
 
-Low_Entity_Result add_wall(Game_State *gs, iv2 tile_pos) {
+Low_Entity_Result add_wall(Game_State *gs, v2 tile_pos) {
   Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_WALL, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
   low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0);
 
   return low;
 }
 
-Low_Entity_Result add_familiar(Game_State *gs, iv2 tile_pos) {
+Low_Entity_Result add_familiar(Game_State *gs, v2 tile_pos) {
   Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_FAMILIAR, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
   low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.5);
   low.low->collides = false;
@@ -217,7 +226,7 @@ Low_Entity_Result add_familiar(Game_State *gs, iv2 tile_pos) {
   return low;
 }
 
-Low_Entity_Result add_monster(Game_State *gs, iv2 tile_pos) {
+Low_Entity_Result add_monster(Game_State *gs, v2 tile_pos) {
   Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_MONSTER, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
   low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0);
 
@@ -234,7 +243,7 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
   // Then, we fixup current High entities for the new camera delta
   for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; high_entity_idx+=1) {
     High_Entity *high = &gs->high_entities[high_entity_idx];
-    high->p = v2_add(high->p, cam_diff_mt);
+    high->p = v2_sub(high->p, cam_diff_mt);
   }
 
   // Then, cull all entities outside camera bounding box - make them low!
@@ -267,7 +276,7 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
 
           if (!rect_isect_rect(camera_bounding_box, entity_bounding_box)) {
             if (low_entity->high_entity_idx) {
-              make_entity_low_freq(gs, low_entity_idx);
+                make_entity_low_freq(gs, low_entity_idx);
             }
           } else {
             if (low_entity->high_entity_idx == 0) {
@@ -346,12 +355,10 @@ void update_familiar(Game_State *gs, Entity entity, f32 dt) {
     Entity test_entity = entity_from_high_entity(gs, high_entity_idx);
 
     if (test_entity.low->kind == ENTITY_KIND_PLAYER) {
-      //printf("player pos: %f %f\n", test_entity.high->p.x, test_entity.high->p.y);
-      //printf("familiar pos: %f %f\n", entity.high->p.x, entity.high->p.y);
       //v2 distance = v2_sub(entity.high->p, test_entity.high->p);
       v2 distance = v2_sub(test_entity.high->p, entity.high->p);
       if (v2_len(distance) < 100) {
-        f32 familiar_speed = 0.1*dt;
+        f32 familiar_speed = 2*dt;
         v2 dp = v2_multf(v2_norm(distance), familiar_speed);
         move_entity(gs, entity.low_entity_idx, dp, dt);
       }
@@ -371,7 +378,6 @@ void update_monster(Game_State *gs, Entity entity, f32 dt) {
 
 void update_hero(Game_State *gs, Entity entity, f32 dt) {
   assert(entity.low->kind == ENTITY_KIND_PLAYER);
-  printf("pos: %f %f\n", entity.high->p.x, entity.high->p.y);
   f32 hero_speed = 15.0;
   Input *input = &gs->input;
   v2 dp = v2m(0,0);
@@ -418,10 +424,10 @@ void game_init(Game_State *gs) {
     for (s32 tile_y = 0; tile_y < gs->world.screen_dim_in_tiles.y; tile_y +=1) {
       for (s32 tile_x = 0; tile_x < gs->world.screen_dim_in_tiles.x; tile_x +=1) {
 
-        iv2 tile_pos = iv2m(
+        v2 tile_pos = v2m(
             tile_x + screen_offset.x*gs->world.screen_dim_in_tiles.x,
             tile_y + screen_offset.y*gs->world.screen_dim_in_tiles.y
-      );
+        );
         //World_Position wp = chunk_pos_from_tile_pos(gs->world.w, tile_pos);
         //wp = canonicalize_position(gs->world.w, tile_pos);
 
@@ -459,8 +465,8 @@ void game_init(Game_State *gs) {
   }
 
   gs->player_low_entity_idx = add_player(gs).entity_idx;
-  add_monster(gs, iv2m(4,4));
-  add_familiar(gs, iv2m(2,4));
+  add_monster(gs, v2m(4,4));
+  add_familiar(gs, v2m(2,4));
 }
 
 void game_update(Game_State *gs, float dt) {
@@ -602,9 +608,9 @@ void game_render(Game_State *gs, float dt) {
     Low_Entity *low = get_low_entity(gs, low_entity_idx);
     // If its the player also render the tile vizualization thingy
     if (low_entity_idx == gs->player_low_entity_idx) {
-      World_Position tile_wp = chunk_pos_from_tile_pos(gs->world.w, iv2m(
-            (low->p.chunk.x * gs->world.w->tiles_per_chunk + low->p.offset.x / gs->world.w->tile_dim_meters.x + gs->world.w->tiles_per_chunk/2),
-            (low->p.chunk.y * gs->world.w->tiles_per_chunk + low->p.offset.y / gs->world.w->tile_dim_meters.y + gs->world.w->tiles_per_chunk/2)
+      World_Position tile_wp = chunk_pos_from_tile_pos(gs->world.w, v2m(
+            floor_f32(low->p.chunk.x * gs->world.w->tiles_per_chunk + low->p.offset.x / gs->world.w->tile_dim_meters.x),
+            floor_f32(low->p.chunk.y * gs->world.w->tiles_per_chunk + low->p.offset.y / gs->world.w->tile_dim_meters.y)
       ));
       rend_push_tile(gs, 98, tile_wp, gs->world.camera_p, gs->world.w->tile_dim_px);
     }
