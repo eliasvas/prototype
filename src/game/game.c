@@ -104,7 +104,6 @@ void make_entity_low_freq(Game_State *gs, u32 low_entity_idx) {
         v2m(gs->world.w->tiles_per_chunk * high_fpos_mt.x / (float)gs->world.w->chunk_dim_meters.x,
           gs->world.w->tiles_per_chunk * high_fpos_mt.y / (float)gs->world.w->chunk_dim_meters.y)
     );
-    // WHY WHY WHY doesnt this work
     low->p = wpos_to_save;
 
     // 2. If its not the last perform a swap
@@ -207,6 +206,10 @@ Low_Entity_Result add_player(Game_State *gs) {
   Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_PLAYER, chunk_pos_from_tile_pos(gs->world.w, v2m(2,2)));
   Entity player_entity = get_high_entity(gs, low.entity_idx);
   player_entity.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.75);
+
+  // TODO: Fill the rest of hit point stuff :/ (ok?)
+  player_entity.low->hit_point_count = 4;
+
 
   return low;
 }
@@ -618,16 +621,31 @@ void game_render(Game_State *gs, float dt) {
     // Render the enitites (for players, entity 
     // position is actually the halfway-x bottom-y point,
     // so we fixup a bit)
+    v2 m2p = v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters);
     switch (low->kind) {
       case ENTITY_KIND_FAMILIAR:
       case ENTITY_KIND_MONSTER:
       case ENTITY_KIND_PLAYER: {
         World_Position pp_fixup = low->p;
         pp_fixup.offset.x -= low->dim_meters.x/2;
-        rend_push_tile_alpha(gs, 3+low->kind, pp_fixup, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
+        rend_push_tile_alpha(gs, 3+low->kind, pp_fixup, gs->world.camera_p, v2_mult(m2p, low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
+
+        // -- Draw the HP
+        for (u32 health_idx = 0; health_idx < low->hit_point_count; health_idx+=1) {
+          v2 hp_dim_mt = v2m(0.5, 0.5);
+          World_Position hp_pos = low->p;
+          hp_pos.offset.y -= 0.5;
+          float hp_spacing_x = 0.6;
+          assert(hp_dim_mt.x < hp_spacing_x);
+          hp_pos.offset.x -= (low->hit_point_count - 1) * hp_spacing_x*0.5;
+          hp_pos.offset.x += health_idx * hp_spacing_x;
+          hp_pos.offset.x -= hp_dim_mt.x/2; // center the hp to the middle
+          hp_pos = canonicalize_position(gs->world.w, hp_pos);
+          rend_push_tile_alpha(gs, 6+16*6, hp_pos, gs->world.camera_p, v2_mult(m2p, hp_dim_mt), 0.5 + 0.5 * (low->high_entity_idx > 0));
+        }
       }break;
       case ENTITY_KIND_WALL: {
-        rend_push_tile_alpha(gs, 1, low->p, gs->world.camera_p, v2_mult(v2_div(gs->world.w->tile_dim_px, gs->world.w->tile_dim_meters), low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
+        rend_push_tile_alpha(gs, 1, low->p, gs->world.camera_p, v2_mult(m2p, low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
       }break;
       case ENTITY_KIND_NIL: {
         // Nothing

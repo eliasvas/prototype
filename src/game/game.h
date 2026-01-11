@@ -20,11 +20,19 @@ typedef struct {
 } High_Entity;
 
 typedef struct {
+  u8 flags;
+  u8 filled_amount;
+} Hit_Point;
+
+typedef struct {
   b32 collides;
   Entity_Kind kind;
   World_Position p;
   v2 delta_p;
   v2 dim_meters;
+
+  u32 hit_point_count;
+  Hit_Point hit_points[16];
 
   u32 high_entity_idx;
 } Low_Entity;
