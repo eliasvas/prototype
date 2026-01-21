@@ -11,6 +11,7 @@ typedef enum {
   ENTITY_KIND_WALL,
   ENTITY_KIND_FAMILIAR,
   ENTITY_KIND_MONSTER,
+  ENTITY_KIND_SWORD,
 } Entity_Kind;
 
 typedef struct {
@@ -33,6 +34,9 @@ typedef struct {
 
   u32 hit_point_count;
   Hit_Point hit_points[16];
+
+  // Garbo
+  u32 sword_low_idx;
 
   u32 high_entity_idx;
 } Low_Entity;

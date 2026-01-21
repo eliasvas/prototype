@@ -184,17 +184,22 @@ u64 add_entity(Game_State *gs, Entity_Kind kind) {
 }
 
 
-Low_Entity_Result add_low_entity(Game_State *gs, Entity_Kind kind, World_Position p) {
+// TODO: Add an arena just for the game (gs->game_arena) 
+
+
+Low_Entity_Result add_low_entity(Game_State *gs, Entity_Kind kind, World_Position *p) {
   Low_Entity_Result res = {};
   u32 low_entity_idx = add_entity(gs, kind);
   Low_Entity *low = get_low_entity(gs, low_entity_idx);
   low->kind = kind;
-  low->p = p;
   low->collides = true;
 
 
-  // TODO: Add an arena just for the game (gs->game_arena) 
-  change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, nullptr, &low->p);
+  if (p) {
+    low->p = change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, nullptr, p);
+  } else { // positionless entity
+    low->p = world_pos_nil(); 
+  }
 
   res.entity_idx = low_entity_idx;
   res.low = low;
@@ -202,27 +207,40 @@ Low_Entity_Result add_low_entity(Game_State *gs, Entity_Kind kind, World_Positio
   return res;
 }
 
+Low_Entity_Result add_sword(Game_State *gs) {
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_SWORD, nullptr);
+  low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.5);
+
+  return low;
+}
+
 Low_Entity_Result add_player(Game_State *gs) {
-  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_PLAYER, chunk_pos_from_tile_pos(gs->world.w, v2m(2,2)));
+  World_Position chunk_pos = chunk_pos_from_tile_pos(gs->world.w, v2m(2,2));
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_PLAYER, &chunk_pos);
   Entity player_entity = get_high_entity(gs, low.entity_idx);
   player_entity.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.75);
 
   // TODO: Fill the rest of hit point stuff :/ (ok?)
   player_entity.low->hit_point_count = 4;
 
+  Low_Entity_Result sword = add_sword(gs);
+  player_entity.low->sword_low_idx = sword.entity_idx;
+
 
   return low;
 }
 
 Low_Entity_Result add_wall(Game_State *gs, v2 tile_pos) {
-  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_WALL, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
+  World_Position chunk_pos = chunk_pos_from_tile_pos(gs->world.w, tile_pos);
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_WALL, &chunk_pos);
   low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0);
 
   return low;
 }
 
 Low_Entity_Result add_familiar(Game_State *gs, v2 tile_pos) {
-  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_FAMILIAR, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
+  World_Position chunk_pos = chunk_pos_from_tile_pos(gs->world.w, tile_pos);
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_FAMILIAR, &chunk_pos);
   low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 0.5);
   low.low->collides = false;
 
@@ -230,8 +248,12 @@ Low_Entity_Result add_familiar(Game_State *gs, v2 tile_pos) {
 }
 
 Low_Entity_Result add_monster(Game_State *gs, v2 tile_pos) {
-  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_MONSTER, chunk_pos_from_tile_pos(gs->world.w, tile_pos));
+  World_Position chunk_pos = chunk_pos_from_tile_pos(gs->world.w, tile_pos);
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_MONSTER, &chunk_pos);
   low.low->dim_meters = v2_multf(gs->world.w->tile_dim_meters, 1.0);
+
+  // TODO: Fill the rest of hit point stuff :/ (ok?)
+  low.low->hit_point_count = 3;
 
   return low;
 }
@@ -345,8 +367,7 @@ void move_entity(Game_State *gs, u64 low_entity_idx, v2 dp, f32 dt) {
   if (!collides) {
     entity.high->p = v2_add(entity.high->p, dp);
     World_Position new_entity_wpos = map_fpos_to_tile_map_position(gs->world.w, entity.low->p, dp);
-    change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, &entity.low->p, &new_entity_wpos);
-    entity.low->p = new_entity_wpos;
+    entity.low->p = change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, &entity.low->p, &new_entity_wpos);
   }
 
 }
@@ -381,6 +402,8 @@ void update_monster(Game_State *gs, Entity entity, f32 dt) {
 
 void update_hero(Game_State *gs, Entity entity, f32 dt) {
   assert(entity.low->kind == ENTITY_KIND_PLAYER);
+
+  // Move the hero
   f32 hero_speed = 15.0;
   Input *input = &gs->input;
   v2 dp = v2m(0,0);
@@ -388,8 +411,14 @@ void update_hero(Game_State *gs, Entity entity, f32 dt) {
   if (input_key_down(input, KEY_SCANCODE_DOWN))dp.y-=hero_speed*dt;
   if (input_key_down(input, KEY_SCANCODE_LEFT))dp.x-=hero_speed*dt;
   if (input_key_down(input, KEY_SCANCODE_RIGHT))dp.x+=hero_speed*dt;
-
   move_entity(gs, entity.low_entity_idx, dp, dt);
+
+  // Spawn sword if need be
+  if (input_key_down(input, KEY_SCANCODE_W)) {
+    Low_Entity *sword_low = get_low_entity(gs, entity.low->sword_low_idx);
+    sword_low->p = change_entity_location(gs->persistent_arena, gs->world.w, entity.low->sword_low_idx, nullptr, &entity.low->p);
+  }
+
 }
 
 
@@ -554,6 +583,9 @@ void game_update(Game_State *gs, float dt) {
       }break;
       case ENTITY_KIND_WALL: {
       }break;
+      case ENTITY_KIND_SWORD: {
+        // Nothing rn?
+      }break;
       case ENTITY_KIND_NIL: {
         // Nothing
       }break;
@@ -643,6 +675,11 @@ void game_render(Game_State *gs, float dt) {
           hp_pos = canonicalize_position(gs->world.w, hp_pos);
           rend_push_tile_alpha(gs, 6+16*6, hp_pos, gs->world.camera_p, v2_mult(m2p, hp_dim_mt), 0.5 + 0.5 * (low->high_entity_idx > 0));
         }
+      }break;
+      case ENTITY_KIND_SWORD: {
+        World_Position pp_fixup = low->p;
+        pp_fixup.offset.x -= low->dim_meters.x/2;
+        rend_push_tile_alpha(gs, 6+16*4, pp_fixup, gs->world.camera_p, v2_mult(m2p, low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));
       }break;
       case ENTITY_KIND_WALL: {
         rend_push_tile_alpha(gs, 1, low->p, gs->world.camera_p, v2_mult(m2p, low->dim_meters), 0.5 + 0.5 * (low->high_entity_idx > 0));

@@ -1,5 +1,22 @@
 #include "world.h"
 
+// TODO: This should be called just INVALID_CHUNK mayb?
+#define WORLD_POS_INVALID_CHUNK (-S32_MAX)
+
+World_Position world_pos_nil(void) {
+  World_Position nilp = (World_Position) {
+    .chunk = iv2m(WORLD_POS_INVALID_CHUNK, WORLD_POS_INVALID_CHUNK),
+    .offset = v2m(0,0),
+  };
+  return nilp;
+}
+
+b32 world_pos_is_valid(World_Position wp) {
+  World_Position nilp = world_pos_nil();
+  b32 valid = (wp.chunk.x == nilp.chunk.x) && (wp.chunk.y == nilp.chunk.y);
+  return valid;
+}
+
 World_Chunk *get_world_chunk_arena(World *w, iv2 chunk_coords, Arena *arena) {
   World_Chunk *chunk= nullptr;
 
@@ -101,7 +118,7 @@ World_Position chunk_pos_from_tile_pos(World *w, v2 tile_pos) {
   return (pos);
 }
 
-void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Position *old, World_Position *new) {
+World_Position change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Position *old, World_Position *new) {
   // 0. If there was a block and its on different chunk, remove it
   if (old) {
     if (!are_in_same_chunk(w, *old, *new)) {
@@ -122,6 +139,8 @@ void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Po
                   free_block->next = w->block_freelist;
                   w->block_freelist = free_block;
               }
+
+              // FIXME: why is it set to true? it doesnt fucking exit should be false
               // double break to exit iteration
               not_found = true;
             }
@@ -132,21 +151,27 @@ void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Po
   }
 
   // 4. Map the new block to the correct chunk now
-  World_Chunk *chunk = get_world_chunk_arena(w, new->chunk, arena);
-  World_Entity_Block *block = chunk->first;
-  if (!block || block->count == block->cap) {
-    World_Entity_Block *new_block = w->block_freelist;
-    if (new_block) {
-      w->block_freelist = new_block->next;
-    } else {
-      new_block = arena_push_struct(arena, World_Entity_Block); 
+  if (new) {
+    World_Chunk *chunk = get_world_chunk_arena(w, new->chunk, arena);
+    World_Entity_Block *block = chunk->first;
+    if (!block || block->count == block->cap) {
+      World_Entity_Block *new_block = w->block_freelist;
+      if (new_block) {
+        w->block_freelist = new_block->next;
+      } else {
+        new_block = arena_push_struct(arena, World_Entity_Block); 
+      }
+      M_ZERO_STRUCT(new_block);
+      new_block->cap = array_count(new_block->low_entity_indices);
+      dll_push_back(chunk->first, chunk->last, new_block);
+      block = new_block;
     }
-    M_ZERO_STRUCT(new_block);
-    new_block->cap = array_count(new_block->low_entity_indices);
-    dll_push_back(chunk->first, chunk->last, new_block);
-    block = new_block;
-  }
-  assert(block);
-  block->low_entity_indices[block->count++] = low_entity_idx;
+    assert(block);
+    block->low_entity_indices[block->count++] = low_entity_idx;
 
+  }
+
+  // 5. return the final entity low position
+  return (new) ? *(new) : world_pos_nil();
 }
+

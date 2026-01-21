@@ -1,6 +1,7 @@
 #ifndef WORLD_H__
 #define WORLD_H__
 
+//#include "game.h"
 #include "base/base_inc.h"
 
 typedef enum {
@@ -66,6 +67,9 @@ World_Chunk *get_world_chunk_arena(World *tm, iv2 chunk_coords, Arena *arena);
 World_Chunk *get_world_chunk(World *w, iv2 chunk_coords);
 World_Position chunk_pos_from_tile_pos(World *w, v2 abs_tile);
 b32 are_in_same_chunk(World *w, World_Position a, World_Position b);
-void change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Position *old, World_Position *new);
+
+World_Position change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Position *old, World_Position *new);
+World_Position world_pos_nil(void);
+b32 world_pos_is_valid(World_Position wp);
 
 #endif
