@@ -223,9 +223,9 @@ Low_Entity_Result add_player(Game_State *gs) {
   // TODO: Fill the rest of hit point stuff :/ (ok?)
   player_entity.low->hit_point_count = 4;
 
+
   Low_Entity_Result sword = add_sword(gs);
   player_entity.low->sword_low_idx = sword.entity_idx;
-
 
   return low;
 }
@@ -277,7 +277,6 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
   v2 camera_p_in_ws = get_world_fpos_in_meters(gs->world.w, gs->world.camera_p);
   rect camera_bounding_box = rec_centered(camera_p_in_ws, v2_multf(v2m(gs->world.screen_dim_in_tiles.x, gs->world.screen_dim_in_tiles.y), screens_to_include));
 
-#if 1
   World_Position camera_bottom = gs->world.camera_p;
   camera_bottom.offset = v2_sub(camera_bottom.offset, v2_multf(v2m(gs->world.screen_dim_in_tiles.x, gs->world.screen_dim_in_tiles.y), screens_to_include * gs->world.w->tile_dim_meters.x));
   camera_bottom = canonicalize_position(gs->world.w, camera_bottom);
@@ -312,32 +311,14 @@ void set_camera(Game_State *gs, World_Position new_camera_pos) {
       }
     }
   }
-#else 
-  // TODO: only use the chunks intersecting the camera
-  for (u32 low_entity_idx = 1; low_entity_idx < gs->low_entity_count; ++low_entity_idx) {
-    Low_Entity *low_entity = get_low_entity(gs, low_entity_idx);
-
-    v2 entity_fpos = get_world_fpos_in_meters(gs->world.w, low_entity->p);
-    rect entity_bounding_box = rec_centered(entity_fpos, v2_multf(low_entity->dim_meters, 0.5));
-
-    if (!rect_isect_rect(camera_bounding_box, entity_bounding_box)) {
-      if (low_entity->high_entity_idx) {
-        make_entity_low_freq(gs, low_entity_idx);
-      }
-    } else {
-      if (low_entity->high_entity_idx == 0) {
-        make_entity_high_freq(gs, low_entity_idx);
-      }
-    }
-  }
-#endif
 
 }
 
 
-void move_entity(Game_State *gs, u64 low_entity_idx, v2 dp, f32 dt) {
+void move_entity(Game_State *gs, u64 low_entity_idx, Move_Spec move_spec, f32 dt) {
   Entity entity = get_high_entity(gs, low_entity_idx);
 
+  v2 move_vec = v2_multf(move_spec.dir, move_spec.speed * dt);
   // Check for entity/tile collisions
   b32 collides = false;
   if (entity.low->collides) {
@@ -345,7 +326,7 @@ void move_entity(Game_State *gs, u64 low_entity_idx, v2 dp, f32 dt) {
       Entity test_entity = entity_from_high_entity(gs, high_entity_idx);
       if (test_entity.low_entity_idx != low_entity_idx && test_entity.low->collides) {
         //v2 entity_new_pos = v2_add(get_world_fpos_in_meters(gs->world.w, entity.low->p), dp);
-        v2 entity_new_pos = v2_add(entity.high->p, dp);
+        v2 entity_new_pos = v2_add(entity.high->p, move_vec);
         v2 entity_new_pos_left = v2_sub(entity_new_pos, v2m(entity.low->dim_meters.x/2,0));
         v2 entity_new_pos_right = v2_add(entity_new_pos, v2m(entity.low->dim_meters.x/2,0));
 
@@ -365,8 +346,8 @@ void move_entity(Game_State *gs, u64 low_entity_idx, v2 dp, f32 dt) {
 
   // If there is no collision map the new entity position back to the low entity
   if (!collides) {
-    entity.high->p = v2_add(entity.high->p, dp);
-    World_Position new_entity_wpos = map_fpos_to_tile_map_position(gs->world.w, entity.low->p, dp);
+    entity.high->p = v2_add(entity.high->p, move_vec);
+    World_Position new_entity_wpos = map_fpos_to_tile_map_position(gs->world.w, entity.low->p, move_vec);
     entity.low->p = change_entity_location(gs->persistent_arena, gs->world.w, low_entity_idx, &entity.low->p, &new_entity_wpos);
   }
 
@@ -382,9 +363,13 @@ void update_familiar(Game_State *gs, Entity entity, f32 dt) {
       //v2 distance = v2_sub(entity.high->p, test_entity.high->p);
       v2 distance = v2_sub(test_entity.high->p, entity.high->p);
       if (v2_len(distance) < 100) {
-        f32 familiar_speed = 2*dt;
-        v2 dp = v2_multf(v2_norm(distance), familiar_speed);
-        move_entity(gs, entity.low_entity_idx, dp, dt);
+
+        Move_Spec move_spec = (Move_Spec) {
+          .dir = v2_norm(distance),
+          .speed = 2.0,
+          .drag = 0.0,
+        };
+        move_entity(gs, entity.low_entity_idx, move_spec, dt);
       }
     }
   }
@@ -404,14 +389,30 @@ void update_hero(Game_State *gs, Entity entity, f32 dt) {
   assert(entity.low->kind == ENTITY_KIND_PLAYER);
 
   // Move the hero
-  f32 hero_speed = 15.0;
   Input *input = &gs->input;
   v2 dp = v2m(0,0);
-  if (input_key_down(input, KEY_SCANCODE_UP))dp.y+=hero_speed*dt;
-  if (input_key_down(input, KEY_SCANCODE_DOWN))dp.y-=hero_speed*dt;
-  if (input_key_down(input, KEY_SCANCODE_LEFT))dp.x-=hero_speed*dt;
-  if (input_key_down(input, KEY_SCANCODE_RIGHT))dp.x+=hero_speed*dt;
-  move_entity(gs, entity.low_entity_idx, dp, dt);
+  if (input_key_down(input, KEY_SCANCODE_UP))dp=v2m(0,1);
+  if (input_key_down(input, KEY_SCANCODE_DOWN))dp=v2m(0,-1);
+  if (input_key_down(input, KEY_SCANCODE_LEFT))dp=v2m(-1,0);
+  if (input_key_down(input, KEY_SCANCODE_RIGHT))dp=v2m(1,0);
+
+  if (input_key_pressed(input, KEY_SCANCODE_W)) {
+    Low_Entity *sword_low = get_low_entity(gs, entity.low->sword_low_idx);
+    World_Position sword_wpos = entity.low->p;
+    sword_low->hit_dir = dp;
+    sword_wpos.offset = v2_add(sword_wpos.offset, v2_multf(sword_low->hit_dir, 5)); // 5 meters
+    sword_wpos = canonicalize_position(gs->world.w, sword_wpos);
+    sword_low->p = change_entity_location(gs->persistent_arena, gs->world.w, entity.low->sword_low_idx, &sword_low->p, &sword_wpos);
+    sword_low->movement_remaining = 0.2;
+
+  }
+
+  Move_Spec move_spec = (Move_Spec) {
+    .dir = dp,
+    .speed = 15.0,
+    .drag = 0.0,
+  };
+  move_entity(gs, entity.low_entity_idx, move_spec, dt);
 
   // Spawn sword if need be
   if (input_key_down(input, KEY_SCANCODE_W)) {
@@ -421,7 +422,27 @@ void update_hero(Game_State *gs, Entity entity, f32 dt) {
 
 }
 
+void update_sword(Game_State *gs, Entity entity, f32 dt) {
+  assert(entity.low->kind == ENTITY_KIND_SWORD);
 
+  Move_Spec move_spec = (Move_Spec) {
+    .dir = entity.low->hit_dir,
+    .speed = 100.0,
+    .drag = 0.0,
+  };
+
+  if (entity.low->movement_remaining > 0) {
+    entity.low->movement_remaining = maximum(entity.low->movement_remaining - dt, 0);
+    move_entity(gs, entity.low_entity_idx, move_spec, dt);
+  } else {
+    // Make entity go to invalid position
+    move_entity(gs, entity.low_entity_idx, move_spec, dt);
+
+    World_Position new_entity_wpos = world_pos_nil();
+    entity.low->p = change_entity_location(gs->persistent_arena, gs->world.w, entity.low->movement_remaining, &entity.low->p, &new_entity_wpos);
+  }
+
+}
 
 void game_init(Game_State *gs) {
 
@@ -584,7 +605,7 @@ void game_update(Game_State *gs, float dt) {
       case ENTITY_KIND_WALL: {
       }break;
       case ENTITY_KIND_SWORD: {
-        // Nothing rn?
+        update_sword(gs, entity, dt);
       }break;
       case ENTITY_KIND_NIL: {
         // Nothing

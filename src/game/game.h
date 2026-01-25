@@ -26,6 +26,13 @@ typedef struct {
 } Hit_Point;
 
 typedef struct {
+  v2 dir; // unit vector
+  f32 speed;
+  f32 drag;
+
+} Move_Spec;
+
+typedef struct {
   b32 collides;
   Entity_Kind kind;
   World_Position p;
@@ -37,6 +44,8 @@ typedef struct {
 
   // Garbo
   u32 sword_low_idx;
+  f32 movement_remaining;
+  v2 hit_dir;
 
   u32 high_entity_idx;
 } Low_Entity;
@@ -52,7 +61,6 @@ typedef struct {
   u32 entity_idx; // the low entity idx
   Low_Entity *low;
 } Low_Entity_Result;
-
 
 
 typedef struct {

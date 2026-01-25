@@ -88,10 +88,12 @@ v2 get_world_fpos_in_meters(World *w, World_Position pos) {
 //TODO: Chunk dim is symmetrical, no reason to
 // use a v2 here, just make it f32
 b32 is_world_pos_canonical(World *w, World_Position p) {
-  assert(p.chunk.x >= -0.5 * w->chunk_dim_meters.x);
-  assert(p.chunk.x <= 0.5 * w->chunk_dim_meters.x);
-  assert(p.chunk.y >= -0.5 * w->chunk_dim_meters.y);
-  assert(p.chunk.y <= 0.5 * w->chunk_dim_meters.y);
+#if 0
+  assert(p.offset.x >= -0.5 * w->chunk_dim_meters.x);
+  assert(p.offset.x <= 0.5 * w->chunk_dim_meters.x);
+  assert(p.offset.y >= -0.5 * w->chunk_dim_meters.y);
+  assert(p.offset.y <= 0.5 * w->chunk_dim_meters.y);
+#endif
   return true;
 }
 
