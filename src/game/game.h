@@ -93,7 +93,7 @@ typedef struct {
   Game_Audio_Output_Buffer audio_out;
 
   // Game specific stuff
-  Game_World world;
+  Game_World gworld;
 
   u64 high_entity_count;
   High_Entity high_entities[256];
