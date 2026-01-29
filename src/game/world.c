@@ -120,42 +120,44 @@ World_Position chunk_pos_from_tile_pos(World *w, v2 tile_pos) {
   return (pos);
 }
 
+// This will update the block cache moving the entity along the different chunks
 World_Position change_entity_location(Arena *arena, World *w, u32 low_entity_idx, World_Position *old, World_Position *new) {
   // 0. If there was a block and its on different chunk, remove it
+  bool should_insert = true;
   if (old) {
     if (!are_in_same_chunk(w, *old, *new)) {
       World_Chunk *chunk = get_world_chunk(w, old->chunk);
       if (chunk) {
-        b32 not_found = true;
+        b32 found = false;
         // 1. Search to find the specific low_entity_idx 
-        for (World_Entity_Block *block = chunk->first; block != nullptr && not_found; block = block->next) {
-          for (u32 entity_itr = 0; entity_itr < block->count && not_found; entity_itr +=1) {
+        for (World_Entity_Block *block = chunk->first; block != nullptr && !found; block = block->next) {
+          for (u32 entity_itr = 0; entity_itr < block->count && !found; entity_itr +=1) {
             // 2. if found remove it!
             if (block->low_entity_indices[entity_itr] == low_entity_idx) {
               block->low_entity_indices[entity_itr] = block->low_entity_indices[--block->count];
 
               // 3. if the block is empty, we will push it to the freelist
-              if (chunk->first->count == 0) {
+              if (block->count == 0) {
                   World_Entity_Block *free_block = dll_remove(chunk->first, chunk->last, block);
                   M_ZERO_STRUCT(free_block);
                   free_block->next = w->block_freelist;
                   w->block_freelist = free_block;
               }
-
-              // FIXME: why is it set to true? it doesnt fucking exit should be false
-              // double break to exit iteration
-              not_found = true;
+              found = true;
             }
           }
         }
+        should_insert |= found;
       }
+    } else {
+      should_insert = false;
     }
   }
 
   // 4. Map the new block to the correct chunk now
-  if (new) {
+  if (new && should_insert) {
     World_Chunk *chunk = get_world_chunk_arena(w, new->chunk, arena);
-    World_Entity_Block *block = chunk->first;
+    World_Entity_Block *block = chunk->last;
     if (!block || block->count == block->cap) {
       World_Entity_Block *new_block = w->block_freelist;
       if (new_block) {

@@ -46,10 +46,12 @@ Sim_Region *begin_sim(Arena *sim_arena, Game_State *gs, World *w, World_Position
   //printf("bound_diffx: %d\n", camera_top.chunk.x - camera_bottom.chunk.x);
   assert(camera_bottom.chunk.x <= camera_top.chunk.x);
   assert(camera_bottom.chunk.y <= camera_top.chunk.y);
+  int add_count = 0;
   for (s32 chunk_x = camera_bottom.chunk.x; chunk_x <= camera_top.chunk.x; chunk_x += 1) {
     for (s32 chunk_y = camera_bottom.chunk.y; chunk_y <= camera_top.chunk.y; chunk_y += 1) {
       World_Chunk *chunk = get_world_chunk_arena(gs->gworld.w, iv2m(chunk_x, chunk_y), gs->persistent_arena);
       for (World_Entity_Block *block = chunk->first; block != nullptr; block = block->next) {
+        printf("block count: %d, next: %lu\n", block->count, UINT_FROM_PTR(block->next));
         for (u32 block_entity_idx = 0; block_entity_idx < block->count; block_entity_idx+=1) {
           u32 storage_idx = block->low_entity_indices[block_entity_idx];
 
@@ -58,6 +60,7 @@ Sim_Region *begin_sim(Arena *sim_arena, Game_State *gs, World *w, World_Position
           v2 entity_fpos = get_world_fpos_in_meters(gs->gworld.w, low_entity->p);
           rect entity_bounding_box = rec_centered(entity_fpos, v2_multf(low_entity->dim_meters, 0.5));
           if (rect_isect_rect(region->bounds, entity_bounding_box)) {
+            add_count+=1;
             Sim_Entity *sim_entity = add_sim_entity(region);
             // Fill out the entity
             assert(sim_entity);
@@ -68,16 +71,12 @@ Sim_Region *begin_sim(Arena *sim_arena, Game_State *gs, World *w, World_Position
             v2 relative_fpos = v2_sub(entity_fpos, sim_origin_fpos);
             sim_entity->p = relative_fpos;
             sim_entity->storage_idx = storage_idx;
-
-            // FIXME: We don't need storage entities to reference sim_entities ever right??
-            // BUT BUT isnt this how we tint the entities to appear 'hot'?
-            //low->high_entity_idx = high_entity_idx;
-
           }
         }
       }
     }
   }
+  printf("Entity adds this frame: %d\n", add_count);
 
 
   return region;
@@ -96,7 +95,7 @@ void end_sim(Sim_Region *region, Game_State *gs) {
   // 2. Map sim_entities back to stored_entities
 
 #if 0
-  for (u32 entity_idx = 0; entity_idx < region->entity_count; entity_idx+=1) {
+  for (u32 entity_idx = 1; entity_idx < region->entity_count; entity_idx+=1) {
     Sim_Entity entity = region->entities[entity_idx];
     World_Position camera_p = region->origin;
 
