@@ -15,12 +15,6 @@ typedef enum {
 } Entity_Kind;
 
 typedef struct {
-  v2 p;
-
-  u32 low_entity_idx;
-} High_Entity;
-
-typedef struct {
   u8 flags;
   u8 filled_amount;
 } Hit_Point;
@@ -32,10 +26,13 @@ typedef struct {
 
 } Move_Spec;
 
+// TODO: Move to sim_region!!
 typedef struct {
+  v2 p;
+
+
   b32 collides;
   Entity_Kind kind;
-  World_Position p;
   v2 delta_p;
   v2 dim_meters;
 
@@ -47,15 +44,16 @@ typedef struct {
   f32 movement_remaining;
   v2 hit_dir;
 
-  u32 high_entity_idx;
-} Low_Entity;
+  // More gameplay stuff
+  // ..
+  u32 storage_idx;
+} Sim_Entity;
 
 typedef struct {
-  High_Entity *high;
-  Low_Entity *low;
-
-  u32 low_entity_idx;
-} Entity;
+  World_Position p;
+  Sim_Entity sim;
+  u32 high_entity_idx;
+} Low_Entity;
 
 typedef struct {
   u32 entity_idx; // the low entity idx
@@ -94,9 +92,6 @@ typedef struct {
 
   // Game specific stuff
   Game_World gworld;
-
-  u64 high_entity_count;
-  High_Entity high_entities[256];
 
   u64 low_entity_count;
   Low_Entity low_entities[1024*10];

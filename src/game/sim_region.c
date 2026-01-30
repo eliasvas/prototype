@@ -4,6 +4,11 @@
 Sim_Entity* add_sim_entity(Sim_Region *region) {
   Sim_Entity *entity = nullptr;
 
+
+  // TODO: Make an add_sim_entity with low_entity_idx, lookup
+  // position get the stuff and stuff and more stuff, stuff it
+v2 get_sim_space_pos(Sim_Region *sim_region, Low_Entity *low){}
+
   if (region->entity_count < region->entity_cap) {
     entity = &region->entities[region->entity_count++];
     M_ZERO_STRUCT(entity);
@@ -43,24 +48,23 @@ Sim_Region *begin_sim(Arena *sim_arena, Game_State *gs, World *w, World_Position
   camera_top.offset = v2_add(camera_top.offset, v2_multf(v2m(gs->gworld.screen_dim_in_tiles.x, gs->gworld.screen_dim_in_tiles.y), screens_to_include * gs->gworld.w->tile_dim_meters.x));
   camera_top = canonicalize_position(gs->gworld.w, camera_top);
 
-  //printf("bound_diffx: %d\n", camera_top.chunk.x - camera_bottom.chunk.x);
   assert(camera_bottom.chunk.x <= camera_top.chunk.x);
   assert(camera_bottom.chunk.y <= camera_top.chunk.y);
-  int add_count = 0;
+  //int add_count = 0;
   for (s32 chunk_x = camera_bottom.chunk.x; chunk_x <= camera_top.chunk.x; chunk_x += 1) {
     for (s32 chunk_y = camera_bottom.chunk.y; chunk_y <= camera_top.chunk.y; chunk_y += 1) {
       World_Chunk *chunk = get_world_chunk_arena(gs->gworld.w, iv2m(chunk_x, chunk_y), gs->persistent_arena);
       for (World_Entity_Block *block = chunk->first; block != nullptr; block = block->next) {
-        printf("block count: %d, next: %lu\n", block->count, UINT_FROM_PTR(block->next));
+        //printf("block count: %d, next: %lu\n", block->count, UINT_FROM_PTR(block->next));
         for (u32 block_entity_idx = 0; block_entity_idx < block->count; block_entity_idx+=1) {
           u32 storage_idx = block->low_entity_indices[block_entity_idx];
 
           // TODO: should be renamed to stored_entity?
           Low_Entity *low_entity = &gs->low_entities[storage_idx];
           v2 entity_fpos = get_world_fpos_in_meters(gs->gworld.w, low_entity->p);
-          rect entity_bounding_box = rec_centered(entity_fpos, v2_multf(low_entity->dim_meters, 0.5));
+          rect entity_bounding_box = rec_centered(entity_fpos, v2_multf(low_entity->sim.dim_meters, 0.5));
           if (rect_isect_rect(region->bounds, entity_bounding_box)) {
-            add_count+=1;
+            //add_count+=1;
             Sim_Entity *sim_entity = add_sim_entity(region);
             // Fill out the entity
             assert(sim_entity);
@@ -76,7 +80,7 @@ Sim_Region *begin_sim(Arena *sim_arena, Game_State *gs, World *w, World_Position
       }
     }
   }
-  printf("Entity adds this frame: %d\n", add_count);
+  //printf("Entity adds this frame: %d\n", add_count);
 
 
   return region;
@@ -94,16 +98,16 @@ static World_Position map_fpos_to_tile_map_position(World *w, World_Position pos
 void end_sim(Sim_Region *region, Game_State *gs) {
   // 2. Map sim_entities back to stored_entities
 
-#if 0
   for (u32 entity_idx = 1; entity_idx < region->entity_count; entity_idx+=1) {
     Sim_Entity entity = region->entities[entity_idx];
-    World_Position camera_p = region->origin;
+    //World_Position camera_p = region->origin;
 
+#if 1
     Low_Entity *low = &gs->low_entities[entity.storage_idx];
 
     World_Position new_entity_wpos = map_fpos_to_tile_map_position(gs->gworld.w, low->p, entity.p);
     low->p = change_entity_location(gs->persistent_arena, gs->gworld.w, entity.storage_idx, &low->p, &new_entity_wpos);
-  }
 #endif
+  }
 
 }

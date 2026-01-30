@@ -147,7 +147,6 @@ World_Position change_entity_location(Arena *arena, World *w, u32 low_entity_idx
             }
           }
         }
-        should_insert |= found;
       }
     } else {
       should_insert = false;

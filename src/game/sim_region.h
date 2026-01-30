@@ -5,13 +5,6 @@
 #include "game.h"
 
 typedef struct {
-  v2 p;
-  // More gameplay stuff
-  // ..
-  u32 storage_idx;
-} Sim_Entity;
-
-typedef struct {
   World *world_ref;
   World_Position origin;
   rect bounds;
