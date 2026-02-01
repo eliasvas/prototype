@@ -138,7 +138,8 @@ World_Position change_entity_location(Arena *arena, World *w, u32 low_entity_idx
 
               // 3. if the block is empty, we will push it to the freelist
               if (block->count == 0) {
-                  World_Entity_Block *free_block = dll_remove(chunk->first, chunk->last, block);
+                  World_Entity_Block *free_block = block;
+                  dll_remove(chunk->first, chunk->last, block);
                   M_ZERO_STRUCT(free_block);
                   free_block->next = w->block_freelist;
                   w->block_freelist = free_block;

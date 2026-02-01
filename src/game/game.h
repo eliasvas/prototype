@@ -44,8 +44,7 @@ typedef struct {
   f32 movement_remaining;
   v2 hit_dir;
 
-  // More gameplay stuff
-  // ..
+  // Ref
   u32 storage_idx;
 } Sim_Entity;
 
