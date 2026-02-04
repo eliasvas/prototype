@@ -3,50 +3,8 @@
 
 #include "base/base_inc.h"
 #include "core/core_inc.h"
+#include "entity.h"
 #include "world.h"
-
-typedef enum {
-  ENTITY_KIND_NIL = 0,
-  ENTITY_KIND_PLAYER = 1,
-  ENTITY_KIND_WALL = 2,
-  ENTITY_KIND_FAMILIAR = 3,
-  ENTITY_KIND_MONSTER = 4,
-  ENTITY_KIND_SWORD = 5,
-} Entity_Kind;
-
-typedef struct {
-  u8 flags;
-  u8 filled_amount;
-} Hit_Point;
-
-typedef struct {
-  v2 dir; // unit vector
-  f32 speed;
-  f32 drag;
-
-} Move_Spec;
-
-// TODO: Move to sim_region!!
-typedef struct {
-  v2 p;
-
-
-  b32 collides;
-  Entity_Kind kind;
-  v2 delta_p;
-  v2 dim_meters;
-
-  u32 hit_point_count;
-  Hit_Point hit_points[16];
-
-  // Garbo
-  u32 sword_low_idx;
-  f32 movement_remaining;
-  v2 hit_dir;
-
-  // Ref
-  u32 storage_idx;
-} Sim_Entity;
 
 typedef struct {
   World_Position p;

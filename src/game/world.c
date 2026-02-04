@@ -171,6 +171,7 @@ World_Position change_entity_location(Arena *arena, World *w, u32 low_entity_idx
       block = new_block;
     }
     assert(block);
+    assert(low_entity_idx);
     block->low_entity_indices[block->count++] = low_entity_idx;
 
   }

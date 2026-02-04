@@ -139,10 +139,8 @@ Low_Entity_Result add_player(Game_State *gs) {
 
 
   // TODO: Add sword!
-#if 0
   Low_Entity_Result sword = add_sword(gs);
-  player_entity.low->sim.sword_low_idx = sword.entity_idx;
-#endif
+  low.low->sim.sword_ref.storage_idx = sword.entity_idx;
 
   return low;
 }
@@ -285,13 +283,14 @@ void update_hero(Game_State *gs, Sim_Entity *entity, f32 dt) {
   };
   move_entity(gs, entity, move_spec, dt);
 
-#if 0
   // Spawn sword if need be
   if (input_key_down(input, KEY_SCANCODE_W)) {
-    Low_Entity *sword_low = get_low_entity(gs, entity.low->sim.sword_low_idx);
-    sword_low->p = change_entity_location(gs->persistent_arena, gs->gworld.w, entity.low->sim.sword_low_idx, nullptr, &entity.low->p);
+    Low_Entity *sword_low = get_low_entity(gs, entity->sword_ref.storage_idx);
+    Low_Entity *hero_low = get_low_entity(gs, entity->storage_idx);
+    sword_low->p = hero_low->p;
+    //Sim_Entity *sword = lookup_sim_entity_from_storage_idx(region);
+    //sword_low->p = change_entity_location(gs->persistent_arena, gs->gworld.w, entity.low->sim.sword_storage_idx, nullptr, &entity.low->p);
   }
-#endif
 
 }
 
