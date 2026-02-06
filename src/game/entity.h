@@ -5,6 +5,13 @@
 #include "core/core_inc.h"
 #include "world.h"
 
+#define INVALID_P (v2m(12345, 12345))
+
+typedef enum {
+  ENTITY_FLAG_COLLIDES = (1 << 0),
+  ENTITY_FLAG_NONSPATIAL = (1 << 1),
+} Entity_Flags;
+
 typedef enum {
   ENTITY_KIND_NIL = 0,
   ENTITY_KIND_PLAYER = 1,
@@ -36,9 +43,8 @@ typedef struct {
 struct Sim_Entity {
   v2 p;
 
-
-  b32 collides;
   Entity_Kind kind;
+  Entity_Flags flags;
   v2 delta_p;
   v2 dim_meters;
 
@@ -53,5 +59,11 @@ struct Sim_Entity {
   // Ref
   u32 storage_idx;
 };
+
+b32 sim_entity_is_flag_set(Sim_Entity *entity, u32 flag);
+void sim_entity_add_flag(Sim_Entity *entity, u32 flag);
+void sim_entity_clear_flag(Sim_Entity *entity, u32 flag);
+void make_sim_entity_non_spatial(Sim_Entity *entity);
+void make_sim_entity_spatial(Sim_Entity *entity, v2 p);
 
 #endif

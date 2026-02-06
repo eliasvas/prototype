@@ -109,8 +109,6 @@ Low_Entity_Result add_low_entity(Game_State *gs, Entity_Kind kind, World_Positio
   u32 low_entity_idx = add_entity(gs, kind);
   Low_Entity *low = get_low_entity(gs, low_entity_idx);
   low->sim.kind = kind;
-  low->sim.collides = true;
-
 
   if (p) {
     low->p = change_entity_location(gs->persistent_arena, gs->gworld.w, low_entity_idx, nullptr, p);
@@ -136,11 +134,13 @@ Low_Entity_Result add_player(Game_State *gs) {
   Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_PLAYER, &chunk_pos);
   low.low->sim.dim_meters = v2_multf(gs->gworld.w->tile_dim_meters, 0.75);
   low.low->sim.hit_point_count = 4;
+  sim_entity_add_flag(&low.low->sim, ENTITY_FLAG_COLLIDES);
 
 
-  // TODO: Add sword!
+  // Add sword!
   Low_Entity_Result sword = add_sword(gs);
   low.low->sim.sword_ref.storage_idx = sword.entity_idx;
+  make_sim_entity_non_spatial(&sword.low->sim);
 
   return low;
 }
@@ -149,6 +149,7 @@ Low_Entity_Result add_wall(Game_State *gs, v2 tile_pos) {
   World_Position chunk_pos = chunk_pos_from_tile_pos(gs->gworld.w, tile_pos);
   Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_WALL, &chunk_pos);
   low.low->sim.dim_meters = v2_multf(gs->gworld.w->tile_dim_meters, 1.0);
+  sim_entity_add_flag(&low.low->sim, ENTITY_FLAG_COLLIDES);
 
   return low;
 }
@@ -157,7 +158,7 @@ Low_Entity_Result add_familiar(Game_State *gs, v2 tile_pos) {
   World_Position chunk_pos = chunk_pos_from_tile_pos(gs->gworld.w, tile_pos);
   Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_FAMILIAR, &chunk_pos);
   low.low->sim.dim_meters = v2_multf(gs->gworld.w->tile_dim_meters, 0.5);
-  low.low->sim.collides = false;
+  //sim_entity_add_flag(&low.low->sim, ENTITY_FLAG_COLLIDES);
 
   return low;
 }
@@ -166,6 +167,7 @@ Low_Entity_Result add_monster(Game_State *gs, v2 tile_pos) {
   World_Position chunk_pos = chunk_pos_from_tile_pos(gs->gworld.w, tile_pos);
   Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_MONSTER, &chunk_pos);
   low.low->sim.dim_meters = v2_multf(gs->gworld.w->tile_dim_meters, 1.0);
+  sim_entity_add_flag(&low.low->sim, ENTITY_FLAG_COLLIDES);
 
   // TODO: Fill the rest of hit point stuff :/ (ok?)
   low.low->sim.hit_point_count = 3;
@@ -173,45 +175,35 @@ Low_Entity_Result add_monster(Game_State *gs, v2 tile_pos) {
   return low;
 }
 
-void move_entity(Game_State *gs, Sim_Entity *entity, Move_Spec move_spec, f32 dt) {
-  //Entity entity = get_high_entity(gs, low_entity_idx);
-  //Low_Entity *low_entity = get_low_entity(gs, low_entity_idx);
-
-  v2 move_vec = v2_multf(move_spec.dir, move_spec.speed * dt);
-  // Check for entity/tile collisions
+void move_entity(Game_State *gs, Sim_Region *region, Sim_Entity *entity, Move_Spec move_spec, f32 dt) {
   b32 collides = false;
-#if 0
-  if (low_entity->sim.collides) {
-    for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; ++high_entity_idx) {
-      High_Entity *test_high = &gs->high_entities[high_entity_idx];
-      if (test_high->low_entity_idx != low_entity_idx && low_entity->sim.collides) {
-        //v2 entity_new_pos = v2_add(get_world_fpos_in_meters(gs->world.w, low_entity->p), dp);
-        v2 entity_new_pos = v2_add(low_entity->sim.p, move_vec);
-        v2 entity_new_pos_left = v2_sub(entity_new_pos, v2m(low_entity->sim.dim_meters.x/2,0));
-        v2 entity_new_pos_right = v2_add(entity_new_pos, v2m(low_entity->sim.dim_meters.x/2,0));
+  v2 move_vec = v2_multf(move_spec.dir, move_spec.speed * dt);
+  v2 new_p = v2_add(entity->p, move_vec);
+  rect bb = rec(new_p.x, new_p.y, entity->dim_meters.x, entity->dim_meters.y); 
 
-        //v2 test_entity_pos_meters = get_world_fpos_in_meters(gs->world.w, test_low_entity->p);
-        v2 test_entity_pos_meters = test_high->p;
-        v2 test_entity_dim_mt = low_entity->sim.dim_meters;
-        rect entity_collision_rect = rec(test_entity_pos_meters.x, test_entity_pos_meters.y, test_entity_dim_mt.x, test_entity_dim_mt.y);
-        if (!collides) {
-          collides = (rect_isect_point(entity_collision_rect, entity_new_pos) ||
-                     rect_isect_point(entity_collision_rect, entity_new_pos_left) ||
-                     rect_isect_point(entity_collision_rect, entity_new_pos_right));
-          //if (collides) { printf("collision succeded with rect %f %f %f %f and pos %f %f\n", entity_pos_meters.x, entity_pos_meters.y, tile_dim_mt.x, tile_dim_mt.y, dp.x, dp.y); }
-        }
+  for (u32 entity_idx = 1; entity_idx < region->entity_count; entity_idx+=1) {
+    Sim_Entity *test_entity = &region->entities[entity_idx];
+    if (test_entity != entity && 
+        sim_entity_is_flag_set(test_entity, ENTITY_FLAG_COLLIDES) && 
+        sim_entity_is_flag_set(entity, ENTITY_FLAG_COLLIDES)) {
+      v2 test_pos = test_entity->p;
+      v2 test_dim = test_entity->dim_meters;
+      rect test_bb = rec(test_pos.x, test_pos.y, test_dim.x, test_dim.y); 
+      if (rect_isect_rect(bb, test_bb)) {
+        collides = true;
+        break;
       }
     }
   }
-#endif
 
   // If there is no collision map the new entity position back to the low entity
   if (!collides) {
-    entity->p = v2_add(entity->p, move_vec);
+    entity->p = new_p;
   }
+
 }
 
-void update_familiar(Game_State *gs, Sim_Entity *entity, f32 dt) {
+void update_familiar(Game_State *gs, Sim_Region *region, Sim_Entity *entity, f32 dt) {
   assert(entity->kind == ENTITY_KIND_FAMILIAR);
 
 
@@ -243,17 +235,17 @@ void update_familiar(Game_State *gs, Sim_Entity *entity, f32 dt) {
       .speed = 2.0,
       .drag = 0.0,
     };
-    move_entity(gs, entity, move_spec, dt);
+    move_entity(gs, region, entity, move_spec, dt);
   }
 #endif
 }
 
-void update_monster(Game_State *gs, Sim_Entity *entity, f32 dt) {
+void update_monster(Game_State *gs, Sim_Region *region, Sim_Entity *entity, f32 dt) {
   assert(entity->kind == ENTITY_KIND_MONSTER);
   // TBA
 }
 
-void update_hero(Game_State *gs, Sim_Entity *entity, f32 dt) {
+void update_hero(Game_State *gs, Sim_Region *region, Sim_Entity *entity, f32 dt) {
   assert(entity->kind == ENTITY_KIND_PLAYER);
 
   // Move the hero
@@ -264,59 +256,51 @@ void update_hero(Game_State *gs, Sim_Entity *entity, f32 dt) {
   if (input_key_down(input, KEY_SCANCODE_LEFT))dp=v2m(-1,0);
   if (input_key_down(input, KEY_SCANCODE_RIGHT))dp=v2m(1,0);
 
-#if 0
-  if (input_key_pressed(input, KEY_SCANCODE_W)) {
-    Low_Entity *sword_low = get_low_entity(gs, entity.low->sim.sword_low_idx);
-    World_Position sword_wpos = entity.low->p;
-    sword_low->sim.hit_dir = dp;
-    sword_wpos.offset = v2_add(sword_wpos.offset, v2_multf(sword_low->sim.hit_dir, 5)); // 5 meters
-    sword_wpos = canonicalize_position(gs->gworld.w, sword_wpos);
-    sword_low->p = change_entity_location(gs->persistent_arena, gs->gworld.w, entity.low->sim.sword_low_idx, &sword_low->p, &sword_wpos);
-    sword_low->sim.movement_remaining = 0.2;
-  }
-#endif
-
   Move_Spec move_spec = (Move_Spec) {
     .dir = dp,
     .speed = 15.0,
     .drag = 0.0,
   };
-  move_entity(gs, entity, move_spec, dt);
+  move_entity(gs, region, entity, move_spec, dt);
 
   // Spawn sword if need be
-  if (input_key_down(input, KEY_SCANCODE_W)) {
-    Low_Entity *sword_low = get_low_entity(gs, entity->sword_ref.storage_idx);
-    Low_Entity *hero_low = get_low_entity(gs, entity->storage_idx);
-    sword_low->p = hero_low->p;
-    //Sim_Entity *sword = lookup_sim_entity_from_storage_idx(region);
-    //sword_low->p = change_entity_location(gs->persistent_arena, gs->gworld.w, entity.low->sim.sword_storage_idx, nullptr, &entity.low->p);
+  if (input_key_down(input, KEY_SCANCODE_W) ||
+      input_key_down(input, KEY_SCANCODE_S) ||
+      input_key_down(input, KEY_SCANCODE_A) ||
+      input_key_down(input, KEY_SCANCODE_D) ) {
+    //Low_Entity *sword_low = get_low_entity(gs, entity->sword_ref.storage_idx);
+    Sim_Entity *sword_entity = entity->sword_ref.ptr;
+    assert(sword_entity); // The entity will be mapped via the load_entity_ref at begin_sim
+    if (sim_entity_is_flag_set(sword_entity, ENTITY_FLAG_NONSPATIAL)) {
+      make_sim_entity_spatial(sword_entity, entity->p); 
+      sword_entity->movement_remaining = 0.3;
+
+      v2 dir = v2m(0,0);
+      if (input_key_down(input, KEY_SCANCODE_W))dir=v2m(0,1);
+      if (input_key_down(input, KEY_SCANCODE_S))dir=v2m(0,-1);
+      if (input_key_down(input, KEY_SCANCODE_A))dir=v2m(-1,0);
+      if (input_key_down(input, KEY_SCANCODE_D))dir=v2m(1,0);
+      sword_entity->hit_dir = dir;
+    }
   }
 
 }
 
-void update_sword(Game_State *gs, Sim_Entity *entity, f32 dt) {
+void update_sword(Game_State *gs, Sim_Region *region, Sim_Entity *entity, f32 dt) {
   assert(entity->kind == ENTITY_KIND_SWORD);
 
   Move_Spec move_spec = (Move_Spec) {
     .dir = entity->hit_dir,
-    .speed = 100.0,
+    .speed = 20.0,
     .drag = 0.0,
   };
 
   if (entity->movement_remaining > 0) {
     entity->movement_remaining = maximum(entity->movement_remaining - dt, 0);
-    move_entity(gs, entity, move_spec, dt);
+    move_entity(gs, region, entity, move_spec, dt);
   } else {
-    // Make entity go to invalid position
-    move_entity(gs, entity, move_spec, dt);
-
-#if 0
-    World_Position new_entity_wpos = world_pos_nil();
-    Low_Entity *low = get_low_entity(gs, entity->storage_idx);
-    low->p = change_entity_location(gs->persistent_arena, gs->gworld.w, entity->movement_remaining, &low->p, &new_entity_wpos);
-#endif
+    make_sim_entity_non_spatial(entity); 
   }
-
 }
 
 void game_init(Game_State *gs) {
@@ -464,18 +448,18 @@ void game_update(Game_State *gs, float dt) {
 
     switch (entity->kind) {
       case ENTITY_KIND_PLAYER: {
-        update_hero(gs, entity, dt);
+        update_hero(gs, sim_region, entity, dt);
       }break;
       case ENTITY_KIND_MONSTER: {
-        update_monster(gs, entity, dt);
+        update_monster(gs, sim_region, entity, dt);
       }break;
       case ENTITY_KIND_FAMILIAR: {
-        update_familiar(gs, entity, dt);
+        update_familiar(gs, sim_region, entity, dt);
       }break;
       case ENTITY_KIND_WALL: {
       }break;
       case ENTITY_KIND_SWORD: {
-        update_sword(gs, entity, dt);
+        update_sword(gs, sim_region, entity, dt);
       }break;
       case ENTITY_KIND_NIL: {
         // Nothing
@@ -497,39 +481,6 @@ void game_render(Game_State *gs, float dt) {
   //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
-
-
-
-  // Logic to draw background, no entities!
-  // Don't remove yet!
-#if 0 
-  s32 screens_to_draw = 3;
-  iv2 screen_offset = iv2m(gs->world.screen_dim_in_tiles.x*screens_to_draw/2, gs->world.screen_dim_in_tiles.y*screens_to_draw/2);
-  if (!entity_idx_is_nil(gs->player_low_entity_idx)) {
-    // Draw The backgound
-    for (s32 row = -screen_offset.y; row < screen_offset.y; row+=1) {
-      for (s32 col = -screen_offset.x; col < screen_offset.x; col+=1) {
-        World_Position tile_pos = (World_Position){
-          .abs_coords = iv2m(col+gs->world.camera_p.abs_coords.x , row+gs->world.camera_p.abs_coords.y),
-          .offset = v2m(0,0),
-        };
-        tile_pos = canonicalize_position(gs->world.w, tile_pos);
-
-        World_Chunk_Position chunk_tile_pos = get_chunk_pos(gs->world.w, tile_pos.abs_coords);
-        World_Chunk *chunk = get_world_chunk_arena(gs->world.w, chunk_tile_pos.chunk_coords, nullptr);
-        Tile_Value value = get_tile_value(gs->world.w, chunk, chunk_tile_pos.chunk_rel);
-
-        if (value == TILE_UNINITIALIZED) { // uninitialized (nothing)
-          rend_push_tile(gs, 68, tile_pos, gs->world.camera_p, gs->world.w->tile_dim_px);
-        } else if (value == TILE_EMPTY) { // empty (grass)
-          rend_push_tile(gs, 69, tile_pos, gs->world.camera_p, gs->world.w->tile_dim_px);
-        } else { // blocker (wall)
-          rend_push_tile(gs, 1, tile_pos, gs->world.camera_p, gs->world.w->tile_dim_px);
-        }
-      }
-    }
-  }
-#endif
 
   // Render all the entities
   for (u32 low_entity_idx = 1; low_entity_idx < gs->low_entity_count; ++low_entity_idx) {

@@ -40,12 +40,14 @@ Sim_Entity *get_sim_entity_from_storage_idx(Arena *sim_arena, Sim_Region *region
 }
 
 v2 get_sim_space_pos(Sim_Region *sim_region, Low_Entity *low) {
-  v2 entity_pos_mt = get_world_fpos_in_meters(sim_region->world_ref, low->p); 
-  v2 sim_center_pos_mt = get_world_fpos_in_meters(sim_region->world_ref, sim_region->origin); 
-  // TODO: check -- should we reverse this?
-  v2 diff = v2_sub(entity_pos_mt, sim_center_pos_mt);
-  //v2 diff = v2_sub(sim_center_pos_mt, entity_pos_mt);
-  return diff;
+  v2 result = INVALID_P;
+  if (!sim_entity_is_flag_set(&low->sim, ENTITY_FLAG_NONSPATIAL)) {
+    v2 entity_pos_mt = get_world_fpos_in_meters(sim_region->world_ref, low->p); 
+    v2 sim_center_pos_mt = get_world_fpos_in_meters(sim_region->world_ref, sim_region->origin); 
+    v2 diff = v2_sub(entity_pos_mt, sim_center_pos_mt);
+    result = diff;
+  }
+  return result;
 }
 
 
@@ -90,9 +92,9 @@ void load_entity_ref(Game_State *gs, Arena *sim_arena, Sim_Region *region, Entit
       assert(ref->storage_idx);
       hash->storage_idx = ref->storage_idx;
       Sim_Entity* entity = add_sim_entity_to_region(gs, region, hash->storage_idx);
-      entity->storage_idx = ref->storage_idx;
       assert(entity);
       hash->ptr = entity;
+      ref->ptr = entity;
     }
   }
 }

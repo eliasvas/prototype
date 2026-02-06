@@ -288,9 +288,9 @@ static bool rect_isect_point(rect r, v2 p) {
 }
 
 static bool rect_isect_rect(rect l, rect r) {
-  return (rect_isect_point(l, v2m(r.x,    r.y)) &&
-          rect_isect_point(l, v2m(r.x+r.w, r.y)) &&
-          rect_isect_point(l, v2m(r.x,     r.y+r.h)) &&
+  return (rect_isect_point(l, v2m(r.x,     r.y)) ||
+          rect_isect_point(l, v2m(r.x+r.w, r.y)) ||
+          rect_isect_point(l, v2m(r.x,     r.y+r.h)) ||
           rect_isect_point(l, v2m(r.x+r.w, r.y+r.h)));
 }
 
