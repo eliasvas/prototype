@@ -1,9 +1,6 @@
 
 #include "sim_region.h"
 
-//  region->hash_slot_count = 1024;
-//  M_ZERO(region->hash_slots, sizeof(Sim_Entity_Hash_Slot)*region->hash_slot_count);
-
 Sim_Entity_Hash_Node *get_sim_entity_hash_from_storage_idx(Arena *sim_arena, Sim_Region *region, u32 storage_idx) {
   u32 slot_hash = storage_idx % region->hash_slot_count; // TODO: better hashing
   Sim_Entity_Hash_Slot *slot = &region->hash_slots[slot_hash];
@@ -69,6 +66,7 @@ Sim_Entity* add_sim_entity_to_region(Game_State *gs, Sim_Region *region, u32 sto
       v2 pos = get_sim_space_pos(region, low);
       entity->p = pos;
       entity->storage_idx = storage_idx;
+      entity->updatable = false;
 
       load_entity_ref(gs, region->arena_ref, region, &entity->sword_ref);
     }
@@ -105,6 +103,7 @@ Sim_Entity* add_sim_entity(Game_State *gs, Sim_Region *region, u32 low_entity_id
 
   v2 pos = get_sim_space_pos(region, low);
   entity->p = pos;
+  entity->updatable = true; // TBA
   entity->storage_idx = low_entity_idx;
 
   return entity;
@@ -113,11 +112,13 @@ Sim_Entity* add_sim_entity(Game_State *gs, Sim_Region *region, u32 low_entity_id
 
 Sim_Region *begin_sim(Arena *sim_arena, Game_State *gs, World *w, World_Position origin, rect bounds) {
   // 0. Allocate the sim_region
+  f32 update_safety_margin = 1.0;
   Sim_Region *region = arena_push_struct(sim_arena, Sim_Region);
   region->world_ref = w;
   region->arena_ref = sim_arena;
   region->origin = origin;
   region->bounds = bounds;
+  region->updatable_bounds = rect_add_radius(bounds, v2m(update_safety_margin, update_safety_margin));
   region->entity_cap = 1024;
   region->entity_count = 1;
   region->entities = arena_push_array(sim_arena, Sim_Entity, region->entity_cap);

@@ -25,3 +25,12 @@ void make_sim_entity_spatial(Sim_Entity *entity, v2 p) {
   entity->p = p;
 }
 
+rect sim_entity_get_collider_rect(Sim_Entity *entity, v2 p) {
+  v2 entity_pos = p;
+  v2 entity_dim = entity->dim_meters;
+  rect r = rec(entity_pos.x, entity_pos.y, entity_dim.x, entity_dim.y);
+  r.x -= entity_dim.x/2;
+
+  return r;
+}
+

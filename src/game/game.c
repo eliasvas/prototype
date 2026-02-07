@@ -136,7 +136,6 @@ Low_Entity_Result add_player(Game_State *gs) {
   low.low->sim.hit_point_count = 4;
   sim_entity_add_flag(&low.low->sim, ENTITY_FLAG_COLLIDES);
 
-
   // Add sword!
   Low_Entity_Result sword = add_sword(gs);
   low.low->sim.sword_ref.storage_idx = sword.entity_idx;
@@ -179,16 +178,14 @@ void move_entity(Game_State *gs, Sim_Region *region, Sim_Entity *entity, Move_Sp
   b32 collides = false;
   v2 move_vec = v2_multf(move_spec.dir, move_spec.speed * dt);
   v2 new_p = v2_add(entity->p, move_vec);
-  rect bb = rec(new_p.x, new_p.y, entity->dim_meters.x, entity->dim_meters.y); 
+  rect bb = sim_entity_get_collider_rect(entity, new_p);
 
   for (u32 entity_idx = 1; entity_idx < region->entity_count; entity_idx+=1) {
     Sim_Entity *test_entity = &region->entities[entity_idx];
     if (test_entity != entity && 
         sim_entity_is_flag_set(test_entity, ENTITY_FLAG_COLLIDES) && 
         sim_entity_is_flag_set(entity, ENTITY_FLAG_COLLIDES)) {
-      v2 test_pos = test_entity->p;
-      v2 test_dim = test_entity->dim_meters;
-      rect test_bb = rec(test_pos.x, test_pos.y, test_dim.x, test_dim.y); 
+      rect test_bb = sim_entity_get_collider_rect(test_entity, test_entity->p);
       if (rect_isect_rect(bb, test_bb)) {
         collides = true;
         break;
@@ -203,108 +200,7 @@ void move_entity(Game_State *gs, Sim_Region *region, Sim_Entity *entity, Move_Sp
 
 }
 
-void update_familiar(Game_State *gs, Sim_Region *region, Sim_Entity *entity, f32 dt) {
-  assert(entity->kind == ENTITY_KIND_FAMILIAR);
-
-
-#if 0
-  for (u32 high_entity_idx = 1; high_entity_idx < gs->high_entity_count; high_entity_idx+=1) {
-    //Entity test_entity = entity_from_high_entity(gs, high_entity_idx);
-
-    High_Entity *test_high = &gs->high_entities[high_entity_idx];
-    Low_Entity *test_low = get_low_entity(gs, test_high->low_entity_idx);
-
-    if (test_low->sim.kind == ENTITY_KIND_PLAYER) {
-      //v2 distance = v2_sub(entity.high->p, test_entity.high->p);
-      v2 distance = v2_sub(test_high->p, entity->p);
-      if (v2_len(distance) < 100) {
-
-        Move_Spec move_spec = (Move_Spec) {
-          .dir = v2_norm(distance),
-          .speed = 2.0,
-          .drag = 0.0,
-        };
-        move_entity(gs, entity->storage_idx, move_spec, dt);
-      }
-    }
-  }
-#else
-  if (entity->kind == ENTITY_KIND_FAMILIAR) {
-    Move_Spec move_spec = (Move_Spec) {
-      .dir = v2m(1,0),
-      .speed = 2.0,
-      .drag = 0.0,
-    };
-    move_entity(gs, region, entity, move_spec, dt);
-  }
-#endif
-}
-
-void update_monster(Game_State *gs, Sim_Region *region, Sim_Entity *entity, f32 dt) {
-  assert(entity->kind == ENTITY_KIND_MONSTER);
-  // TBA
-}
-
-void update_hero(Game_State *gs, Sim_Region *region, Sim_Entity *entity, f32 dt) {
-  assert(entity->kind == ENTITY_KIND_PLAYER);
-
-  // Move the hero
-  Input *input = &gs->input;
-  v2 dp = v2m(0,0);
-  if (input_key_down(input, KEY_SCANCODE_UP))dp=v2m(0,1);
-  if (input_key_down(input, KEY_SCANCODE_DOWN))dp=v2m(0,-1);
-  if (input_key_down(input, KEY_SCANCODE_LEFT))dp=v2m(-1,0);
-  if (input_key_down(input, KEY_SCANCODE_RIGHT))dp=v2m(1,0);
-
-  Move_Spec move_spec = (Move_Spec) {
-    .dir = dp,
-    .speed = 15.0,
-    .drag = 0.0,
-  };
-  move_entity(gs, region, entity, move_spec, dt);
-
-  // Spawn sword if need be
-  if (input_key_down(input, KEY_SCANCODE_W) ||
-      input_key_down(input, KEY_SCANCODE_S) ||
-      input_key_down(input, KEY_SCANCODE_A) ||
-      input_key_down(input, KEY_SCANCODE_D) ) {
-    //Low_Entity *sword_low = get_low_entity(gs, entity->sword_ref.storage_idx);
-    Sim_Entity *sword_entity = entity->sword_ref.ptr;
-    assert(sword_entity); // The entity will be mapped via the load_entity_ref at begin_sim
-    if (sim_entity_is_flag_set(sword_entity, ENTITY_FLAG_NONSPATIAL)) {
-      make_sim_entity_spatial(sword_entity, entity->p); 
-      sword_entity->movement_remaining = 0.3;
-
-      v2 dir = v2m(0,0);
-      if (input_key_down(input, KEY_SCANCODE_W))dir=v2m(0,1);
-      if (input_key_down(input, KEY_SCANCODE_S))dir=v2m(0,-1);
-      if (input_key_down(input, KEY_SCANCODE_A))dir=v2m(-1,0);
-      if (input_key_down(input, KEY_SCANCODE_D))dir=v2m(1,0);
-      sword_entity->hit_dir = dir;
-    }
-  }
-
-}
-
-void update_sword(Game_State *gs, Sim_Region *region, Sim_Entity *entity, f32 dt) {
-  assert(entity->kind == ENTITY_KIND_SWORD);
-
-  Move_Spec move_spec = (Move_Spec) {
-    .dir = entity->hit_dir,
-    .speed = 20.0,
-    .drag = 0.0,
-  };
-
-  if (entity->movement_remaining > 0) {
-    entity->movement_remaining = maximum(entity->movement_remaining - dt, 0);
-    move_entity(gs, region, entity, move_spec, dt);
-  } else {
-    make_sim_entity_non_spatial(entity); 
-  }
-}
-
 void game_init(Game_State *gs) {
-
   // Initialize the World
   gs->gworld.screen_dim_in_tiles = iv2m(9,7);
   gs->gworld.w = arena_push_struct(gs->persistent_arena, World);
@@ -446,25 +342,86 @@ void game_update(Game_State *gs, float dt) {
   for (u32 entity_idx = 1; entity_idx < sim_region->entity_count; entity_idx+=1) {
     Sim_Entity *entity = &sim_region->entities[entity_idx];
 
+    Move_Spec move_spec = {};
     switch (entity->kind) {
       case ENTITY_KIND_PLAYER: {
-        update_hero(gs, sim_region, entity, dt);
+        Input *input = &gs->input;
+        v2 dp = v2m(0,0);
+        if (input_key_down(input, KEY_SCANCODE_UP))dp=v2m(0,1);
+        if (input_key_down(input, KEY_SCANCODE_DOWN))dp=v2m(0,-1);
+        if (input_key_down(input, KEY_SCANCODE_LEFT))dp=v2m(-1,0);
+        if (input_key_down(input, KEY_SCANCODE_RIGHT))dp=v2m(1,0);
+
+        move_spec = (Move_Spec) {
+          .dir = dp,
+          .speed = 15.0,
+          .drag = 0.0,
+        };
+
+        // Spawn sword if need be
+        if (input_key_down(input, KEY_SCANCODE_W) ||
+            input_key_down(input, KEY_SCANCODE_S) ||
+            input_key_down(input, KEY_SCANCODE_A) ||
+            input_key_down(input, KEY_SCANCODE_D) ) {
+          //Low_Entity *sword_low = get_low_entity(gs, entity->sword_ref.storage_idx);
+          Sim_Entity *sword_entity = entity->sword_ref.ptr;
+          assert(sword_entity); // The entity will be mapped via the load_entity_ref at begin_sim
+          if (sim_entity_is_flag_set(sword_entity, ENTITY_FLAG_NONSPATIAL)) {
+            make_sim_entity_spatial(sword_entity, entity->p); 
+            sword_entity->movement_remaining = 0.3;
+
+            v2 dir = v2m(0,0);
+            if (input_key_down(input, KEY_SCANCODE_W))dir=v2m(0,1);
+            if (input_key_down(input, KEY_SCANCODE_S))dir=v2m(0,-1);
+            if (input_key_down(input, KEY_SCANCODE_A))dir=v2m(-1,0);
+            if (input_key_down(input, KEY_SCANCODE_D))dir=v2m(1,0);
+            sword_entity->hit_dir = dir;
+          }
+        }
       }break;
       case ENTITY_KIND_MONSTER: {
-        update_monster(gs, sim_region, entity, dt);
+                                  //TBA
       }break;
       case ENTITY_KIND_FAMILIAR: {
-        update_familiar(gs, sim_region, entity, dt);
+        for (u32 entity_idx = 1; entity_idx < sim_region->entity_count; entity_idx+=1) {
+          Sim_Entity *test_entity = &sim_region->entities[entity_idx];
+          if (test_entity->kind == ENTITY_KIND_PLAYER) {
+            v2 distance = v2_sub(test_entity->p, entity->p);
+            if (v2_len(distance) < 100) {
+                move_spec = (Move_Spec) {
+                  .dir = v2_norm(distance),
+                  .speed = 1.0,
+                  .drag = 0.0,
+                };
+                break;
+            }
+          }
+        }
       }break;
       case ENTITY_KIND_WALL: {
+                               // TBA
       }break;
       case ENTITY_KIND_SWORD: {
-        update_sword(gs, sim_region, entity, dt);
+        move_spec = (Move_Spec) {
+          .dir = entity->hit_dir,
+          .speed = 20.0,
+          .drag = 0.0,
+        };
+
+        if (entity->movement_remaining > 0) {
+          entity->movement_remaining = maximum(entity->movement_remaining - dt, 0);
+        } else {
+          make_sim_entity_non_spatial(entity); 
+        }
       }break;
       case ENTITY_KIND_NIL: {
         // Nothing
       }break;
       default: break;
+    }
+
+    if (!sim_entity_is_flag_set(entity, ENTITY_FLAG_NONSPATIAL)) {
+        move_entity(gs, sim_region, entity, move_spec, dt);
     }
   }
   end_sim(sim_region, gs);

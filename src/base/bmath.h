@@ -294,6 +294,12 @@ static bool rect_isect_rect(rect l, rect r) {
           rect_isect_point(l, v2m(r.x+r.w, r.y+r.h)));
 }
 
+static bool rect_inside_rect(rect b, rect s) {
+  return (rect_isect_point(b, v2m(s.x,     s.y)) &&
+          rect_isect_point(b, v2m(s.x+s.w, s.y)) &&
+          rect_isect_point(b, v2m(s.x,     s.y+s.h)) &&
+          rect_isect_point(b, v2m(s.x+s.w, s.y+s.h)));
+}
 
 static rect rect_calc_bounding_rect(rect r0, rect r1) {
   v2 p0 = v2m(
@@ -312,6 +318,14 @@ static rect rect_calc_bounding_rect(rect r0, rect r1) {
     .w = p1.x - p0.x,
     .h = p1.y - p0.y,
   };
+}
+static rect rect_add_radius(rect r, v2 radius) {
+  r.x -= radius.x;
+  r.y -= radius.y;
+  r.w += 2.0*radius.x;
+  r.h += 2.0*radius.y;
+
+  return r;
 }
 
 typedef enum {

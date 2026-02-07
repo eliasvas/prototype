@@ -26,6 +26,7 @@ typedef struct {
   Arena *arena_ref;
 
   World_Position origin;
+  rect updatable_bounds;
   rect bounds;
 
   u32 entity_cap;

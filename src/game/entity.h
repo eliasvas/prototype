@@ -58,6 +58,7 @@ struct Sim_Entity {
 
   // Ref
   u32 storage_idx;
+  b32 updatable;
 };
 
 b32 sim_entity_is_flag_set(Sim_Entity *entity, u32 flag);
@@ -66,4 +67,5 @@ void sim_entity_clear_flag(Sim_Entity *entity, u32 flag);
 void make_sim_entity_non_spatial(Sim_Entity *entity);
 void make_sim_entity_spatial(Sim_Entity *entity, v2 p);
 
+rect sim_entity_get_collider_rect(Sim_Entity *entity, v2 p);
 #endif
