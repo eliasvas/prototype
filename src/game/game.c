@@ -129,9 +129,9 @@ Low_Entity_Result add_sword(Game_State *gs) {
   return low;
 }
 
-Low_Entity_Result add_player(Game_State *gs) {
+Low_Entity_Result add_hero(Game_State *gs) {
   World_Position chunk_pos = chunk_pos_from_tile_pos(gs->gworld.w, v2m(2,2));
-  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_PLAYER, &chunk_pos);
+  Low_Entity_Result low = add_low_entity(gs, ENTITY_KIND_HERO, &chunk_pos);
   low.low->sim.dim_meters = v2_multf(gs->gworld.w->tile_dim_meters, 0.75);
   low.low->sim.hit_point_count = 4;
   sim_entity_add_flag(&low.low->sim, ENTITY_FLAG_COLLIDES);
@@ -272,9 +272,25 @@ void game_init(Game_State *gs) {
     }
   }
 
-  gs->player_low_entity_idx = add_player(gs).entity_idx;
+  gs->hero_low_entity_idx = add_hero(gs).entity_idx;
   add_monster(gs, v2m(4,4));
   add_familiar(gs, v2m(2,4));
+}
+
+b32 sim_entity_are_same_kind(Sim_Entity *a, Sim_Entity *b) {
+  b32 res = (a->kind == b->kind);
+  return res;
+}
+
+void sim_entity_handle_collision(Sim_Entity *a, Sim_Entity *b) {
+  if (sim_entity_are_same_kind(a,b)) {
+
+  } else {
+    if (a->kind == ENTITY_KIND_SWORD && b->kind == ENTITY_KIND_MONSTER) {
+      printf("Monster killed!\n");
+    }
+  }
+
 }
 
 // DELETEME
@@ -326,14 +342,14 @@ void game_update(Game_State *gs, float dt) {
   }
 
   // Set the camera position
-  //Entity camera = get_low_entity(gs, gs->player_low_entity_idx);
+  //Entity camera = get_low_entity(gs, gs->hero_low_entity_idx);
 
   s32 screens_to_include = 1;
   v2 camera_p_in_ws = get_world_fpos_in_meters(gs->gworld.w, gs->gworld.camera_p);
   rect region_box = rec_centered(camera_p_in_ws, v2_multf(v2m(gs->gworld.screen_dim_in_tiles.x, gs->gworld.screen_dim_in_tiles.y), screens_to_include));
 
-  World_Position player_wpos = get_low_entity(gs, gs->player_low_entity_idx)->p;
-  gs->gworld.camera_p = player_wpos;
+  World_Position hero_wpos = get_low_entity(gs, gs->hero_low_entity_idx)->p;
+  gs->gworld.camera_p = hero_wpos;
 
   Sim_Region *sim_region = begin_sim(gs->frame_arena, gs, gs->gworld.w, gs->gworld.camera_p, region_box);
   sim_entity_count = sim_region->entity_count;
@@ -344,7 +360,7 @@ void game_update(Game_State *gs, float dt) {
 
     Move_Spec move_spec = {};
     switch (entity->kind) {
-      case ENTITY_KIND_PLAYER: {
+      case ENTITY_KIND_HERO: {
         Input *input = &gs->input;
         v2 dp = v2m(0,0);
         if (input_key_down(input, KEY_SCANCODE_UP))dp=v2m(0,1);
@@ -367,14 +383,15 @@ void game_update(Game_State *gs, float dt) {
           Sim_Entity *sword_entity = entity->sword_ref.ptr;
           assert(sword_entity); // The entity will be mapped via the load_entity_ref at begin_sim
           if (sim_entity_is_flag_set(sword_entity, ENTITY_FLAG_NONSPATIAL)) {
-            make_sim_entity_spatial(sword_entity, entity->p); 
-            sword_entity->movement_remaining = 0.3;
 
             v2 dir = v2m(0,0);
             if (input_key_down(input, KEY_SCANCODE_W))dir=v2m(0,1);
             if (input_key_down(input, KEY_SCANCODE_S))dir=v2m(0,-1);
             if (input_key_down(input, KEY_SCANCODE_A))dir=v2m(-1,0);
             if (input_key_down(input, KEY_SCANCODE_D))dir=v2m(1,0);
+
+            make_sim_entity_spatial(sword_entity, v2_add(entity->p, v2_multf(v2_mult(entity->dim_meters, dir),1.1))); 
+            sword_entity->movement_remaining = 0.3;
             sword_entity->hit_dir = dir;
           }
         }
@@ -385,7 +402,7 @@ void game_update(Game_State *gs, float dt) {
       case ENTITY_KIND_FAMILIAR: {
         for (u32 entity_idx = 1; entity_idx < sim_region->entity_count; entity_idx+=1) {
           Sim_Entity *test_entity = &sim_region->entities[entity_idx];
-          if (test_entity->kind == ENTITY_KIND_PLAYER) {
+          if (test_entity->kind == ENTITY_KIND_HERO) {
             v2 distance = v2_sub(test_entity->p, entity->p);
             if (v2_len(distance) < 100) {
                 move_spec = (Move_Spec) {
@@ -442,8 +459,8 @@ void game_render(Game_State *gs, float dt) {
   // Render all the entities
   for (u32 low_entity_idx = 1; low_entity_idx < gs->low_entity_count; ++low_entity_idx) {
     Low_Entity *low = get_low_entity(gs, low_entity_idx);
-    // If its the player also render the tile vizualization thingy
-    if (low_entity_idx == gs->player_low_entity_idx) {
+    // If its the hero also render the tile vizualization thingy
+    if (low_entity_idx == gs->hero_low_entity_idx) {
       World_Position tile_wp = chunk_pos_from_tile_pos(gs->gworld.w, v2m(
             floor_f32(low->p.chunk.x * gs->gworld.w->tiles_per_chunk + low->p.offset.x / gs->gworld.w->tile_dim_meters.x),
             floor_f32(low->p.chunk.y * gs->gworld.w->tiles_per_chunk + low->p.offset.y / gs->gworld.w->tile_dim_meters.y)
@@ -451,17 +468,28 @@ void game_render(Game_State *gs, float dt) {
       rend_push_tile(gs, 98, tile_wp, gs->gworld.camera_p, gs->gworld.w->tile_dim_px);
     }
 
-    // Render the enitites (for players, entity 
+    // Render the enitites (for heros, entity 
     // position is actually the halfway-x bottom-y point,
     // so we fixup a bit)
     v2 m2p = v2_div(gs->gworld.w->tile_dim_px, gs->gworld.w->tile_dim_meters);
     switch (low->sim.kind) {
       case ENTITY_KIND_FAMILIAR:
       case ENTITY_KIND_MONSTER:
-      case ENTITY_KIND_PLAYER: {
+      case ENTITY_KIND_HERO:
+      case ENTITY_KIND_WALL: {
         World_Position pp_fixup = low->p;
         pp_fixup.offset.x -= low->sim.dim_meters.x/2;
-        rend_push_tile_alpha(gs, 3+low->sim.kind, pp_fixup, gs->gworld.camera_p, v2_mult(m2p, low->sim.dim_meters), 0.5 + 0.5 * (low->sim.storage_idx > 0));
+        u32 draw_idx = 3+low->sim.kind;
+        if (low->sim.kind == ENTITY_KIND_WALL) {
+          draw_idx = 1;
+        }
+
+        rend_push_tile_alpha(gs, draw_idx, pp_fixup, gs->gworld.camera_p, v2_mult(m2p, low->sim.dim_meters), 0.5 + 0.5 * (low->sim.storage_idx > 0));
+#if 0
+        rect collider = sim_entity_get_collider_rect(&low->sim, low->sim.p);
+        World_Position collider_pos = map_fpos_to_tile_map_position(gs->gworld.w, gs->gworld.camera_p, v2m(collider.x, collider.y));
+        rend_push_tile_alpha(gs, 98, collider_pos, gs->gworld.camera_p, v2_mult(m2p, v2m(collider.w, collider.h)), 0.1 + 0.5 * (low->sim.storage_idx > 0));
+#endif
 
         // -- Draw the HP
         for (u32 health_idx = 0; health_idx < low->sim.hit_point_count; health_idx+=1) {
@@ -482,9 +510,6 @@ void game_render(Game_State *gs, float dt) {
         pp_fixup.offset.x -= low->sim.dim_meters.x/2;
         rend_push_tile_alpha(gs, 6+16*4, pp_fixup, gs->gworld.camera_p, v2_mult(m2p, low->sim.dim_meters), 0.5 + 0.5 * (low->sim.storage_idx > 0));
       }break;
-      case ENTITY_KIND_WALL: {
-        rend_push_tile_alpha(gs, 1, low->p, gs->gworld.camera_p, v2_mult(m2p, low->sim.dim_meters), 0.5 + 0.5 * (low->sim.storage_idx > 0));
-      }break;
       case ENTITY_KIND_NIL: {
         // Nothing
       }break;
@@ -498,7 +523,7 @@ void game_render(Game_State *gs, float dt) {
   // ..
   // ..
   // In the end, perform a UI pass (TBA)
-  // Right now: Print debug player info stuff
+  // Right now: Print debug hero info stuff
   gui_frame_begin(gs->screen_dim, &gs->input, &gs->cmd_list, dt);
 
 	gui_set_next_child_layout_axis(GUI_AXIS_X);
@@ -511,9 +536,9 @@ void game_render(Game_State *gs, float dt) {
     gui_set_next_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
     gui_set_next_pref_width((Gui_Size){GUI_SIZE_KIND_TEXT_CONTENT, 10.0, 1.0});
     gui_set_next_text_color(col(0.7, 0.8, 0.1, 0.9));
-    Low_Entity *low = get_low_entity(gs, gs->player_low_entity_idx);
-    buf player_info = arena_sprintf(gs->frame_arena, "low_p: chunk(%d,%d), offset(%f, %f)", low->p.chunk.x, low->p.chunk.y, low->p.offset.x, low->p.offset.y);
-    gui_label(player_info);
+    Low_Entity *low = get_low_entity(gs, gs->hero_low_entity_idx);
+    buf hero_info = arena_sprintf(gs->frame_arena, "low_p: chunk(%d,%d), offset(%f, %f)", low->p.chunk.x, low->p.chunk.y, low->p.offset.x, low->p.offset.y);
+    gui_label(hero_info);
   }
   gui_pop_parent();
 

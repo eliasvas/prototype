@@ -53,7 +53,7 @@ typedef struct {
   u64 low_entity_count;
   Low_Entity low_entities[1024*10];
 
-  u64 player_low_entity_idx;
+  u64 hero_low_entity_idx;
   
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;

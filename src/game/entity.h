@@ -14,7 +14,7 @@ typedef enum {
 
 typedef enum {
   ENTITY_KIND_NIL = 0,
-  ENTITY_KIND_PLAYER = 1,
+  ENTITY_KIND_HERO = 1,
   ENTITY_KIND_WALL = 2,
   ENTITY_KIND_FAMILIAR = 3,
   ENTITY_KIND_MONSTER = 4,

@@ -287,11 +287,19 @@ static bool rect_isect_point(rect r, v2 p) {
   return ((p.x >= r.x) && (p.x <= r.x+r.w)) && ((p.y >= r.y) && (p.y <= r.y+r.h));
 }
 
+/*
 static bool rect_isect_rect(rect l, rect r) {
   return (rect_isect_point(l, v2m(r.x,     r.y)) ||
           rect_isect_point(l, v2m(r.x+r.w, r.y)) ||
           rect_isect_point(l, v2m(r.x,     r.y+r.h)) ||
           rect_isect_point(l, v2m(r.x+r.w, r.y+r.h)));
+}
+*/
+static bool rect_isect_rect(rect a, rect b) {
+    return !(a.x + a.w < b.x ||
+             b.x + b.w < a.x ||
+             a.y + a.h < b.y ||
+             b.y + b.h < a.y);
 }
 
 static bool rect_inside_rect(rect b, rect s) {
