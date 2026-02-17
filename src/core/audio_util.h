@@ -7,6 +7,10 @@
 // https://lisyarus.github.io/blog/posts/audio-mixing.html
 // https://www.youtube.com/watch?v=udbA7u1zYfc (WAV spec)
 
+// Mixer
+// https://www.youtube.com/watch?v=UuqcgQxpfO8&list=PLEMXAbCVnmY4UakJTODzmY-6rSPKkuLr5 (Handmade Hero audio)
+// https://ruby0x1.github.io/machinery_bloa_archive/post/writing-a-low-level-sound-system/index.html
+
 // TODO: WAV loading
 // TODO: Audio subsystem (based on SDL_Audio ok?)
 
@@ -63,5 +67,26 @@ static b32 write_sample_wav_file(const char *filename, void *data, u32 data_size
   return true;
 }
 
+
+#if 0
+  // Audio test
+  u32 sample_rate = 44100; 
+  u32 num_seconds = 4;
+  u32 num_channels = 2;
+
+  u32 num_samples = sample_rate * num_channels * num_seconds;
+  s32* wdata = arena_push_array(gs->frame_arena, s32, num_samples);
+
+  s32 sample_value1 = 0;
+  s32 sample_value2 = 0;
+  for (u32 i = 0; i < num_samples; i+=2) {
+    sample_value1 += 8000000;
+    sample_value2 += 1200000;
+    wdata[i] = sample_value1;
+    wdata[i+1] = sample_value2;
+  }
+
+  assert(write_sample_wav_file("build/hello.wav", wdata, num_samples * sizeof(wdata[0]), num_channels, sample_rate, sizeof(wdata[0])*8)); 
+#endif
 
 #endif

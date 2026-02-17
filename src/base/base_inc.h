@@ -7,5 +7,6 @@
 #include "profiler.h"
 #include "hash.h"
 #include "color.h"
+#include "easing.h"
 
 #endif
