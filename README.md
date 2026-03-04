@@ -34,28 +34,31 @@ python -m http.server
 ->localhost:8000 in your browser
 ```
 
-### Make your own game to compile with the engine
-```
-mkdir my_game
-cp prototype my_game
-cd my_game
-cp prototype/demo ./game
-cp prototype/data ./data
-make your own build.sh
-```
+### Making your own game with the engine
+You can easily use this engine to make a game by plugging your game's source/data directories like so:
+```bash
+    mkdir my_awesome_game
+    cd my_awesome_game
+    git init
+    git submodule add https://github.com/eliasvas/prototype
+    git submodule update --init --recursive
 
-#### Sample _build.sh_ for external game
+    cp -r prototype/src/demo/ ./game
+    cp -r prototype/data ./data
+
+    cat > build.sh << 'EOF'
+    #!/usr/bin/env bash
+    set -e
+    ENGINE_DIR="./prototype"
+    GAME_DIR="./game"
+    OUTPUT_DIR="./build"
+    "$ENGINE_DIR/build.sh" gd="$GAME_DIR" od="$OUTPUT_DIR"
+    EOF
+    chmod +x build.sh
+
+    ./build.sh
+    ./build/prototype
 ```
-#!/usr/bin/env bash
-set -e
-
-ENGINE_DIR="./prototype"
-GAME_DIR="./game"
-OUTPUT_DIR="./build"
-"$ENGINE_DIR/build.sh" gd="$GAME_DIR" od="$OUTPUT_DIR"
-```
-
-
 
 ## Module Architecture
 ```mermaid
