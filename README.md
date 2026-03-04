@@ -1,5 +1,5 @@
-# A tiny game prototype
-More info soon !!
+# A tiny game engine/framework
+
 ## Deps
 ```terminal
 sudo dnf install git clang clang-devel SDL3 SDL3-devel glew glew-devel -y
@@ -33,6 +33,29 @@ cd build
 python -m http.server
 ->localhost:8000 in your browser
 ```
+
+### Make your own game to compile with the engine
+```
+mkdir my_game
+cp prototype my_game
+cd my_game
+cp prototype/demo ./game
+cp prototype/data ./data
+make your own build.sh
+```
+
+#### Sample _build.sh_ for external game
+```
+#!/usr/bin/env bash
+set -e
+
+ENGINE_DIR="./prototype"
+GAME_DIR="./game"
+OUTPUT_DIR="./build"
+"$ENGINE_DIR/build.sh" gd="$GAME_DIR" od="$OUTPUT_DIR"
+```
+
+
 
 ## Module Architecture
 ```mermaid
