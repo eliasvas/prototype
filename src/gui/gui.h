@@ -342,4 +342,17 @@ typedef enum {
 Gui_Dialog_State gui_dialog(buf id, buf person_name, buf prompt);
 int gui_choice_box(buf id, buf *choices, int count);
 
+typedef struct {
+  b32 exit_btn_pressed;
+  b32 start_btn_pressed;
+
+  b32 fullscreen;
+  b32 turbo;
+
+  f32 music_volume;
+  f32 fx_volume;
+} Simple_Game_Options;
+
+void gui_simple_game_options_menu(buf s, Simple_Game_Options *opt);
+
 #endif

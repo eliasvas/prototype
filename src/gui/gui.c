@@ -276,7 +276,8 @@ void gui_build_begin(void) {
 
 
 	// build top level's root guiBox
-	gui_set_next_child_layout_axis(GUI_AXIS_Y);
+  gui_set_next_fixed_width(gui_get_ctx()->screen_dim.x);
+  gui_set_next_fixed_height(gui_get_ctx()->screen_dim.y);
 	Gui_Box *root = gui_box_build_from_str(0, MAKE_STR("ImRootPlsDontPutSameHashSomewhereElse"));
 	gui_push_parent(root);
   gui_get_ctx()->root = root;
@@ -995,4 +996,79 @@ int gui_choice_box(buf id, buf *choices, int count) {
 
   return ret;
 }
+
+void gui_centered_region_begin(buf s, f32 stretch_percent, b32 x_axis, b32 y_axis) {
+  if (x_axis) {
+    gui_set_next_pref_width((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, stretch_percent, 1.0});
+    gui_set_next_pref_height((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+    gui_set_next_child_layout_axis(GUI_AXIS_X);
+    Gui_Box *horizontal_container = gui_box_build_from_str(GB_FLAG_DRAW_BACKGROUND|GB_FLAG_CLIP, arena_sprintf(gui_get_ctx()->temp_arena, "horizontal##%.*s", (int)s.count, s.data));
+    gui_push_parent(horizontal_container);
+    gui_spacer((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1, 0.5});
+  }
+
+  if (y_axis) { gui_set_next_pref_width((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+    gui_set_next_pref_height((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, stretch_percent, 1.0});
+    gui_set_next_pref_width((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+    gui_set_next_child_layout_axis(GUI_AXIS_Y);
+    Gui_Box *vertical_container = gui_box_build_from_str(GB_FLAG_DRAW_BACKGROUND|GB_FLAG_CLIP, arena_sprintf(gui_get_ctx()->temp_arena, "vertical##%.*s", (int)s.count, s.data));
+    gui_push_parent(vertical_container);
+    gui_spacer((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1, 0.5});
+  }
+}
+
+void gui_centered_region_end(b32 x_axis, b32 y_axis) {
+  if (y_axis) {
+    gui_spacer((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1, 0.5});
+    gui_pop_parent(); // vertical container
+  }
+
+  if (x_axis) {
+    gui_spacer((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1, 0.5});
+    gui_pop_parent(); // horizontal container
+  }
+}
+
+void gui_simple_game_options_menu(buf s, Simple_Game_Options *opt) {
+  gui_push_text_alignment(GUI_TEXT_ALIGNMENT_CENTER);
+  gui_centered_region_begin(arena_sprintf(gui_get_ctx()->temp_arena, "center_reg##%.*s", (int)s.count, s.data), 0.5,1,1);
+  gui_set_next_pref_width((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+  gui_set_next_pref_height((Gui_Size){.kind = GUI_SIZE_KIND_PARENT_PCT, 1.0, 1.0});
+  gui_set_next_bg_color(col(0.3,0.3,0.3,0.3));
+  gui_set_next_child_layout_axis(GUI_AXIS_Y);
+  Gui_Box *master_container = gui_box_build_from_str(GB_FLAG_DRAW_BACKGROUND|GB_FLAG_CLIP, arena_sprintf(gui_get_ctx()->temp_arena, "master##%.*s", (int)s.count, s.data));
+  gui_push_parent(master_container);
+
+  v2 pad = v2m(10,10);
+
+  //gui_centered_region_begin(MAKE_STR("first"), 1.0, 1, 0);
+  gui_set_next_bg_color(col(0.6,0.2,0.2,1.0));
+  gui_set_next_pref_width((Gui_Size){.kind = GUI_SIZE_KIND_TEXT_CONTENT, pad.x, 1.0});
+  gui_set_next_pref_height((Gui_Size){.kind = GUI_SIZE_KIND_TEXT_CONTENT, pad.y, 1.0});
+  Gui_Signal start_sig = gui_button(arena_sprintf(gui_get_ctx()->temp_arena, "start##%.*s", (int)s.count, s.data));
+  if (start_sig.flags & GUI_SIGNAL_FLAG_LMB_PRESSED) {
+    opt->start_btn_pressed = true;
+  } else {
+    opt->start_btn_pressed = false;
+  }
+  //gui_centered_region_end(1,0);
+
+  //gui_centered_region_begin(MAKE_STR("second"), 1.0, 1, 0);
+  gui_set_next_bg_color(col(0.5,0.2,0.3,1.0));
+  gui_set_next_pref_width((Gui_Size){.kind = GUI_SIZE_KIND_TEXT_CONTENT, pad.x, 1.0});
+  gui_set_next_pref_height((Gui_Size){.kind = GUI_SIZE_KIND_TEXT_CONTENT, pad.y, 1.0});
+  Gui_Signal exit_sig = gui_button(arena_sprintf(gui_get_ctx()->temp_arena, "exit##%.*s", (int)s.count, s.data));
+  if (exit_sig.flags & GUI_SIGNAL_FLAG_LMB_PRESSED) {
+    opt->exit_btn_pressed = true;
+  } else {
+    opt->exit_btn_pressed = false;
+  }
+  //gui_centered_region_end(1,0);
+
+  gui_pop_parent(); // master container
+  gui_centered_region_end(1,1);
+
+  gui_pop_text_alignment();
+}
+
 
