@@ -1,10 +1,17 @@
+// Desc:
+// This is the 'entry point' of the program
+// Here we initialize all state (SDL/opengl/single-header libs)
+// for each backend (e.g SDL/GLFW etc..) there should be one platform_xxx.c file
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_log.h>
 
 #include <stdio.h>
 #include <assert.h>
+
+#define BRAND_IMPLEMENTATION
+#define PROFILER_IMPLEMENTATION
 #include "base/base_inc.h"
-#include "input.h"
 
 #define STB_SPRINTF_IMPLEMENTATION
 #include <stb/stb_sprintf.h>
@@ -18,7 +25,6 @@
 
 #include "game.h"
 
-// we need this to port to WASM sadly, because WASM programs are event based, no main loops :(
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL_main.h>
 
@@ -30,8 +36,8 @@
 #endif
 
 static Game_Api game_api = {};
+//BRAND_SEED_DEF();
 
-//f64 platform_get_time();
 typedef struct {
   u8 *data;
   u64 width;
@@ -84,6 +90,12 @@ u64 platform_read_cpu_freq() {
   return SDL_GetPerformanceFrequency();
 }
 
+u64 platform_get_ticks_since_epoch() {
+  SDL_Time ticks = {};
+  SDL_GetCurrentTime(&ticks);
+  return (u64)ticks;
+}
+
 f64 platform_get_time() {
   return (f64)SDL_GetTicksNS() / 1000000000.0;
 }
@@ -132,6 +144,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   TIME_FUNC;
 
   profiler_begin();
+
+  BRAND_SEED(platform_get_ticks_since_epoch());
 
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
     SDL_Log("Could not initialize SDL");

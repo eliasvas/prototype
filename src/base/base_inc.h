@@ -8,5 +8,6 @@
 #include "hash.h"
 #include "color.h"
 #include "easing.h"
+#include "brand.h"
 
 #endif

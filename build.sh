@@ -83,7 +83,7 @@ $CC $CFLAGS -O0 -std=gnu23 \
 $(pkg-config --cflags $PKGS) \
 -L"$OUTPUT_DIR" \
 -Iext -Isrc -I"$GAME_DIR" \
-src/base/*.c src/core/*.c \
+ src/core/*.c \
 -o "$OUTPUT_DIR/prototype" \
 $(pkg-config --libs $PKGS)
 
