@@ -364,9 +364,10 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   sdl_state->frame_start = SDL_GetTicksNS();
 
   input_end_frame(&sdl_state->gs.input);
-  return SDL_APP_CONTINUE;
+  return (sdl_state->gs.should_close) ? SDL_APP_SUCCESS : SDL_APP_CONTINUE;
 }
 
+// TODO: Here we could serialize everything right??
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
   platform_unload_game_api(&game_api); // Is this needed though? maybe for a game_api.shutdown(..) save?
   profiler_end_and_print();
