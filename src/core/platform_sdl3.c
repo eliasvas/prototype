@@ -268,7 +268,6 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
 SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
   TIME_FUNC;
-  //SDL_State *sdl_state = (SDL_State*)appstate;
   SDL_State *sdl_state = (SDL_State*)appstate;
 
   Input_Event_Node input_event = {};
@@ -282,6 +281,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
     input_event.evt = (Input_Event){
       .data.mme = (Input_MouseMotion_Event) { .mouse_pos = mouse_pos },
       .kind = INPUT_EVENT_KIND_MOUSEMOTION,
+    };
+  } else if (event->type == SDL_EVENT_MOUSE_WHEEL) {
+    v2 wheel_delta = v2m(event->wheel.x, event->wheel.y);
+    input_event.evt = (Input_Event){
+      .data.mwe = (Input_MouseWheel_Event) { .wheel_delta = wheel_delta },
+      .kind = INPUT_EVENT_KIND_MOUSEWHEEL,
     };
   } else if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN || event->type == SDL_EVENT_MOUSE_BUTTON_UP) {
     input_event.evt = (Input_Event){
@@ -300,7 +305,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
       .kind = INPUT_EVENT_KIND_KEEB,
     };
   }
-
   input_push_event(&sdl_state->gs.input, sdl_state->gs.frame_arena, &input_event.evt);
 
   return SDL_APP_CONTINUE;

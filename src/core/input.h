@@ -7,6 +7,7 @@ typedef enum {
   INPUT_EVENT_KIND_KEEB,
   INPUT_EVENT_KIND_MOUSE,
   INPUT_EVENT_KIND_MOUSEMOTION,
+  INPUT_EVENT_KIND_MOUSEWHEEL,
   INPUT_EVENT_KIND_GAMEPAD,
 } Input_Event_Kind;
 
@@ -25,6 +26,10 @@ typedef struct {
 typedef struct {
   v2 mouse_pos;
 } Input_MouseMotion_Event;
+
+typedef struct {
+  v2 wheel_delta;
+} Input_MouseWheel_Event;
 
 typedef enum {
     KEY_SCANCODE_UNKNOWN = 0,
@@ -129,6 +134,7 @@ typedef struct {
   union {
     Input_Mouse_Event         me;
     Input_MouseMotion_Event   mme;
+    Input_MouseWheel_Event    mwe;
     Input_Keeb_Event          ke;
     Input_Gamepad_Event       ge;
   } data;
@@ -155,6 +161,7 @@ typedef struct {
     Input_Event_Node *first;
     Input_Event_Node *last;
 
+    v2 wheel_delta;
     v2 mouse_pos;
     v2 prev_mouse_pos;
 } Input;
@@ -175,5 +182,6 @@ b32 input_mkey_down(Input *input, Input_Mouse_Button button);
 
 v2 input_get_mouse_pos(Input *input);
 v2 input_get_mouse_delta(Input *input);
+v2 input_get_scroll_delta(Input *input);
 
 #endif

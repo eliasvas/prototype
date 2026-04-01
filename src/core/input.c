@@ -3,6 +3,7 @@
 
 // TODO: Gamepad Events
 // TODO: Scrolling Events
+// TODO: Multiple keyboards/mouses (Gonna be hard we have to map KB/M to logical indices I think)
 
 void input_process_events(Input *input) {
   for (Input_Event_Node *node = input->first; node != nullptr; node = node->next) {
@@ -29,8 +30,11 @@ void input_process_events(Input *input) {
       case INPUT_EVENT_KIND_MOUSEMOTION:
         input->mouse_pos = evt.data.mme.mouse_pos; 
         break;
+      case INPUT_EVENT_KIND_MOUSEWHEEL:
+        input->wheel_delta = v2_add(input->wheel_delta, evt.data.mwe.wheel_delta); 
+        break;
       case INPUT_EVENT_KIND_GAMEPAD:
-        // TBH
+        // TBA
         break;
       default: 
         assert(0 && "Corrupted event cannot be processed");
@@ -53,6 +57,7 @@ void input_end_frame(Input *input) {
     input->mouse_state[mouse_key_idx].transition_count = 0;
   }
   input->prev_mouse_pos = input->mouse_pos;
+  input->wheel_delta = v2m(0,0);
 }
 
 void input_push_event(Input *input, Arena *arena, Input_Event *evt) {
@@ -98,3 +103,6 @@ v2 input_get_mouse_delta(Input *input) {
   return v2_sub(input->mouse_pos, input->prev_mouse_pos);
 }
 
+v2 input_get_scroll_delta(Input *input) {
+  return input->wheel_delta;
+}
