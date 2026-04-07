@@ -18,6 +18,7 @@ typedef struct {
   Arena *persistent_arena; // For persistent allocations
   Arena *frame_arena; // For per-frame allocations
   rect game_viewport;
+  b32 should_close;
   
   // Interface between platform <-> game
   f32 time_sec;

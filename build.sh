@@ -9,48 +9,7 @@ CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum \
   -pedantic -fno-exceptions -fstack-protector -g -fsanitize=address"
 CC="clang"
 
-# -----------------------------
-# Parse arguments
-# Usage: ./build.sh gd=../my_game od=out clean=0
-# -----------------------------
-for arg in "$@"; do
-  case $arg in
-  gd=*)
-    GAME_DIR="${arg#*=}"
-    ;;
-  od=*)
-    OUTPUT_DIR="${arg#*=}"
-    ;;
-  clean=*)
-    CLEAN="${arg#*=}"
-    ;;
-  *)
-    echo "Unknown option: $arg"
-    exit 1
-    ;;
-  esac
-done
-
-# -----------------------------
-# Defaults (can be overridden)
-# -----------------------------
-ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GAME_DIR="$(realpath "$GAME_DIR")"
-OUTPUT_DIR="$(realpath -m "$OUTPUT_DIR")"
-CLEAN=1
-
-echo "Game dir:   $GAME_DIR"
-echo "Output dir: $OUTPUT_DIR"
-echo
-
-# -----------------------------
-# Prepare output directory
-# -----------------------------
-if [ "$CLEAN" -eq 1 ]; then
-  rm -rf "$OUTPUT_DIR"
-fi
-
-mkdir -p "$OUTPUT_DIR"
+source "build_common.sh"
 
 export ASAN_OPTIONS=detect_stack_use_after_return=1
 export LSAN_OPTIONS=suppressions=lsan_ignore.txt
