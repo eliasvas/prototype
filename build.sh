@@ -19,38 +19,38 @@ export LSAN_OPTIONS=suppressions=lsan_ignore.txt
 # -----------------------------
 echo "Building game..."
 
-$CC $CFLAGS -O0 -std=gnu23 \
--Iext -I"$ENGINE_DIR"/src -fPIC -shared \
-"$ENGINE_DIR"/src/core/input.c "$GAME_DIR"/*.c "$ENGINE_DIR"/src/gui/*.c \
+CFLAGS="${CFLAGS:-} -std=gnu23"
+DEBUG_FLAGS="-O0 -g"
+RELEASE_FLAGS="-O2"
+
+LDFLAGS="${LDFLAGS:-}"
+INCLUDE_DIRS="-Iext -I$ENGINE_DIR/src"
+
+$CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared \
+"$ENGINE_DIR"/src/core/input.c \
+"$GAME_DIR"/*.c \
+"$ENGINE_DIR"/src/gui/*.c \
 -o "$OUTPUT_DIR/game.so"
 
-if [ $? -eq 0 ]; then
-  echo "Game Build succeeded. ✅"
-else
-  echo "Game Build failed. ❌"
-  exit 1
-fi
+[ $? -eq 0 ] && echo "Game Build succeeded. ✅" || { echo "Game Build failed. ❌"; exit 1; }
 
 # -----------------------------
 # Build the engine executable
 # -----------------------------
 echo "Building engine..."
 
+PKG_CFLAGS="$(pkg-config --cflags $PKGS)"
+PKG_LIBS="$(pkg-config --libs $PKGS)"
+
 pushd "$ENGINE_DIR" > /dev/null
 
-$CC $CFLAGS -O0 -std=gnu23 \
-$(pkg-config --cflags $PKGS) \
--L"$OUTPUT_DIR" \
--Iext -Isrc -I"$GAME_DIR" \
- src/core/*.c \
--o "$OUTPUT_DIR/prototype" \
-$(pkg-config --libs $PKGS)
+$CC $CFLAGS $DEBUG_FLAGS $PKG_CFLAGS \
+    -Iext -Isrc -I"$GAME_DIR" \
+    src/core/*.c \
+    -o "$OUTPUT_DIR/prototype" \
+    -L"$OUTPUT_DIR" \
+    $PKG_LIBS
 
 popd > /dev/null
 
-if [ $? -eq 0 ]; then
-  echo "Core Build succeeded. ✅"
-else
-  echo "Core Build failed. ❌"
-  exit 1
-fi
+[ $? -eq 0 ] && echo "Core Build succeeded. ✅" || { echo "Core Build failed. ❌"; exit 1; }
