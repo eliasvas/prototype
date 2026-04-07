@@ -13,6 +13,7 @@ typedef struct {
   u64 reserved;
   u64 committed;
 } Arena;
+
 static_assert(sizeof(Arena) < ARENA_DEFAULT_CHUNK_SIZE);
 
 static void arena_align_forward(Arena *arena) {
@@ -66,6 +67,15 @@ static void arena_pop(Arena *arena, u64 bytes_to_pop) {
   arena->current -= bytes_to_pop;
 }
 
+static void arena_reset_to_pos(Arena *arena, u64 pos) {
+  assert(arena->current >= pos);
+  arena->current = pos;
+}
+
+static u64 arena_get_current_pos(Arena *arena) {
+  return arena->current;
+}
+
 #define arena_push_array(arena, s, count) arena_push((arena), sizeof(s)*(count))
 #define arena_push_array_nz(arena, s, count) arena_push_nz((arena), sizeof(s)*(count))
 
@@ -104,11 +114,14 @@ static Arena* arena_make(u64 size_in_bytes) {
   return arena_make_with_alignment(size_in_bytes, 64);
 }
 
+// Here we allocated the null terminator but don't return
+// the actual size, its a bit obfuscated if we wanna pop
+// right after, we could leak 1 byte for each pop..
 static buf arena_sprintf(Arena *arena, const char* format, ...) {
   va_list args;
   va_start(args, format);
 
-  // shoudl we do +1 for null terminator.. is that ok? I think MSVC adds null terminator by default? @TEST
+  // +1 byte for null terminator
   s32 size = vsnprintf(NULL, 0, format, args)+1;
 
   // Also because of push_array_nz, the 'null' terminator is not nulled

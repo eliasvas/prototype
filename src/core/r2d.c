@@ -161,21 +161,23 @@ static R2D_Quad_Array rend_quad_chunk_list_to_array(Arena *arena, R2D_Quad_Chunk
   return qa;
 }
 
-// TODO: DONT DONT DONT use sprintf, could we do arena_sprintf(..) here?
+// TODO: We could save the prev arena offset and reset to that, no arena_pop nonsense!
 static void r2d_flush(R2D *rend, Batch_Vertex *vertices, u64 count) {
+  u64 arena_prev_pos = arena_get_current_pos(rend->arena); 
   // We set the correct texture for each slot, if not found, we just assign a dummy white texture for debug purposes
-  char name_buf[REND_MAX_TEXTURES][64] = {};
   for (u64 tex_idx = 0; tex_idx < rend->tex_array.cap; ++tex_idx) {
-    sprintf(name_buf[tex_idx], "u_textures[%lu]", tex_idx);
+    buf sampler_name = arena_sprintf(rend->arena, "u_textures[%lu]", tex_idx);
+
     if (tex_idx < rend->tex_array.count) {
-      batch_bundle.textures[tex_idx] = (Ogl_Tex_Slot){ .name = name_buf[tex_idx], .tex = rend->tex_array.textures[tex_idx],};
+      batch_bundle.textures[tex_idx] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = rend->tex_array.textures[tex_idx],};
     } else {
-      batch_bundle.textures[tex_idx] = (Ogl_Tex_Slot){ .name = name_buf[tex_idx], .tex = white_tex,};
+      batch_bundle.textures[tex_idx] = (Ogl_Tex_Slot){ .name = sampler_name.data, .tex = white_tex,};
     }
   }
   ogl_buf_update(&batch_bundle.vbos[0].buffer, 0, vertices, count, sizeof(Batch_Vertex));
   ogl_render_bundle_draw(&batch_bundle, OGL_PRIM_TYPE_TRIANGLE_FAN, 4, count);
   rend_tex_array_clear(&rend->tex_array);
+  arena_reset_to_pos(rend->arena, arena_prev_pos);
 }
 
 R2D* r2d_begin(Arena *arena, R2D_Cam *cam, rect viewport, rect scissor) {
@@ -191,10 +193,10 @@ R2D* r2d_begin(Arena *arena, R2D_Cam *cam, rect viewport, rect scissor) {
           .buffer = ogl_buf_make(OGL_BUF_KIND_VERTEX, OGL_BUF_HINT_DYNAMIC,nullptr, REND_MAX_INSTANCES, sizeof(Batch_Vertex)),
           .vattribs = {
             [0] = { .location = 0, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, src_rect), .stride = sizeof(Batch_Vertex), .instanced = true, },
-            [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect), .stride = sizeof(Batch_Vertex),.instanced = true, },
-            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),    .stride = sizeof(Batch_Vertex),.instanced = true, },
-            [3] = { .location = 3, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),  .stride = sizeof(Batch_Vertex),.instanced = true, },
-            [4] = { .location = 4, .type = OGL_DATA_TYPE_INT, .offset = offsetof(Batch_Vertex, tex_slot),  .stride = sizeof(Batch_Vertex),.instanced = true, },
+            [1] = { .location = 1, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, dst_rect), .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [2] = { .location = 2, .type = OGL_DATA_TYPE_VEC4,  .offset = offsetof(Batch_Vertex, color),    .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [3] = { .location = 3, .type = OGL_DATA_TYPE_FLOAT, .offset = offsetof(Batch_Vertex, rot_rad),  .stride = sizeof(Batch_Vertex),.instanced = true,  },
+            [4] = { .location = 4, .type = OGL_DATA_TYPE_INT,   .offset = offsetof(Batch_Vertex, tex_slot),  .stride = sizeof(Batch_Vertex),.instanced = true, },
           },
         },
       },
