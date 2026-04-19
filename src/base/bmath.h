@@ -39,6 +39,7 @@ typedef union v2
     f32 raw[2];
 }v2;
 
+// Generic
 INLINE v2  v2m(f32 x, f32 y)           { return (v2){{x, y}}; }
 INLINE v2  v2_add(v2 a, v2 b)          { return v2m(a.x+b.x,a.y+b.y); }
 INLINE v2  v2_sub(v2 a, v2 b)          { return v2m(a.x-b.x,a.y-b.y); }
@@ -50,8 +51,9 @@ INLINE v2  v2_lerp(v2 a, v2 b, f32 x)  { return v2m(a.x*(1.0-x) + b.x*x,a.y*(1.0
 INLINE f32 v2_dot(v2 a, v2 b)          { return (a.x*b.x)+(a.y*b.y); }
 INLINE f32 v2_len(v2 a)                { return sqrt_f32(v2_dot(a,a)); }
 INLINE v2  v2_norm(v2 a)               { f32 vl=v2_len(a);return v2_divf(a,vl); }
-INLINE v2  v2_rot(v2 a, f32 angle_rad) { return v2m(a.x*cos(angle_rad)-a.y*sin(angle_rad), a.x*sin(angle_rad)+a.y*cos(angle_rad)); }
 INLINE b32 v2_eq(v2 a, v2 b)           { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001)); }
+// Right-handed only
+INLINE v2  v2_rot(v2 a, f32 arad) { return v2m(a.x*cos(arad)-a.y*sin(arad), a.x*sin(arad)+a.y*cos(arad)); }
 
 typedef union v3
 {
@@ -60,7 +62,8 @@ typedef union v3
     f32 raw[3];
 }v3;
 
-INLINE v3 v3m(f32 x, f32 y, f32 z)    { return (v3){{x, y, z}}; }
+// Generic
+INLINE v3  v3m(f32 x, f32 y, f32 z)   { return (v3){{x, y, z}}; }
 INLINE v3  v3_add(v3 a, v3 b)         { return v3m(a.x+b.x,a.y+b.y,a.z+b.z); }
 INLINE v3  v3_sub(v3 a, v3 b)         { return v3m(a.x-b.x,a.y-b.y,a.z-b.z); }
 INLINE v3  v3_mult(v3 a, v3 b)        { return v3m(a.x*b.x,a.y*b.y,a.z*b.z); }
@@ -70,9 +73,13 @@ INLINE v3  v3_divf(v3 a, f32 b)       { return v3m(a.x/b,a.y/b,a.z/b); }
 INLINE v3  v3_lerp(v3 a, v3 b, f32 x) { return v3m(a.x*(1.0-x) + b.x*x,a.y*(1.0-x) + b.y*x,a.z*(1.0-x)+b.z*x); }
 INLINE f32 v3_dot(v3 a, v3 b)         { return (a.x*b.x)+(a.y*b.y)+(a.z*b.z); }
 INLINE f32 v3_len(v3 a)               { return sqrt_f32(v3_dot(a,a)); }
-INLINE v3  v3_norm(v3 a)              { f32 vl=v3_len(a);assert(!equalf(vl,0.0,0.01));return v3_divf(a,vl); }
-INLINE v3  v3_cross(v3 a,v3 b)        { v3 res; res.x=(a.y*b.z)-(a.z*b.y); res.y=(a.z*b.x)-(a.x*b.z); res.z=(a.x*b.y)-(a.y*b.x); return (res); }
+INLINE v3  v3_norm(v3 a)              { f32 vl=v3_len(a);if (equalf(vl,0.0,0.000001))return a; else return v3_divf(a,vl); }
 INLINE b32 v3_eq(v3 a, v3 b)          { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001) && equalf(a.z,b.z,0.001)); }
+// Right-handed only
+INLINE v3  v3_cross(v3 a,v3 b)        { v3 res; res.x=(a.y*b.z)-(a.z*b.y); res.y=(a.z*b.x)-(a.x*b.z); res.z=(a.x*b.y)-(a.y*b.x); return (res); }
+INLINE v3  v3_rot_x(v3 a, f32 arad)   { return v3m(a.x,a.y*cos_f32(arad)-a.z*sin_f32(arad),a.y*sin_f32(arad)+a.z*cos_f32(arad)); }
+INLINE v3  v3_rot_y(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)-a.z*sin_f32(arad),a.y,a.x*sin_f32(arad)+a.z*cos_f32(arad)); }
+INLINE v3  v3_rot_z(v3 a, f32 arad)   { return v3m(a.x*cos_f32(arad)-a.y*sin_f32(arad),a.x*sin_f32(arad)+a.y*cos_f32(arad),a.z); }
 
 typedef union v4
 {
@@ -82,6 +89,8 @@ typedef union v4
 }v4;
 
 INLINE v4 v4m(f32 x, f32 y, f32 z, f32 w) { return (v4){{x, y, z, w}}; }
+INLINE v4 v4m_3(v3 a)                     { return v4m(a.x,a.y,a.z,1); }
+INLINE v3  v3m_4(v4 a)                    { return v3m(a.x,a.y,a.z); } // should be up
 INLINE v4 v4_add(v4 a, v4 b)              { return v4m(a.x+b.x,a.y+b.y,a.z+b.z,a.w+b.w); }
 INLINE v4 v4_sub(v4 a, v4 b)              { return v4m(a.x-b.x,a.y-b.y,a.z-b.z,a.w-b.w); }
 INLINE v4 v4_mult(v4 a, v4 b)             { return v4m(a.x*b.x,a.y*b.y,a.z*b.z,a.w*b.w); }
@@ -93,6 +102,8 @@ INLINE f32 v4_dot(v4 a, v4 b)             { return (a.x*b.x)+(a.y*b.y)+(a.z*b.z)
 INLINE f32 v4_len(v4 a)                   { return sqrt_f32(v4_dot(a,a)); }
 INLINE v4  v4_norm(v4 a)                  { f32 vl=v4_len(a);assert(!equalf(vl,0.0,0.01));return v4_divf(a,vl); }
 INLINE b32 v4_eq(v4 a, v4 b)              { return (equalf(a.x,b.x,0.001) && equalf(a.y,b.y,0.001) && equalf(a.z,b.z,0.001) && equalf(a.w,b.w,0.001)); }
+//INLINE v4  v4_persp_divide(v4 a)          {if(a.w != 0) { a = v4_divf(a, a.w);}; return a;}
+INLINE v4  v4_persp_divide(v4 a)          {if(a.w != 0) { a.x = a.x/a.w; a.y = a.y/a.w; a.z = a.z/a.w;}; return a;}
 
 typedef union {
     f32 col[3][3];//{x.x,x.y,x.z,0,y.x,y.y,y.z,0,z.x,z.y,z.z,0,p.x,p.y,p.z,1}
