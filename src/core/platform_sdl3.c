@@ -23,6 +23,9 @@
 #define OGL_IMPLEMENTATION
 #include "ogl.h"
 
+#define INPUT_IMPLEMENTATION
+#include "core/input.h"
+
 #include "game.h"
 
 #define SDL_MAIN_USE_CALLBACKS
@@ -303,6 +306,10 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
         .is_down = (event->type == SDL_EVENT_KEY_DOWN),
       },
       .kind = INPUT_EVENT_KIND_KEEB,
+    };
+  } else if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+    input_event.evt = (Input_Event){
+      .kind = INPUT_EVENT_KIND_RESIZE,
     };
   }
   input_push_event(&sdl_state->gs.input, sdl_state->gs.frame_arena, &input_event.evt);

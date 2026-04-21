@@ -27,7 +27,6 @@ LDFLAGS="${LDFLAGS:-}"
 INCLUDE_DIRS="-Iext -I$ENGINE_DIR/src"
 
 $CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared \
-"$ENGINE_DIR"/src/core/input.c \
 "$GAME_DIR"/*.c \
 "$ENGINE_DIR"/src/gui/*.c \
 -o "$OUTPUT_DIR/game.so"

@@ -177,31 +177,30 @@ typedef struct {
 
 #ifndef OGL_IMPLEMENTATION
 
-  extern void ogl_init();
-  extern void ogl_clear(color c);
+  void ogl_init();
+  void ogl_clear(color c);
 
-  extern bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
-  extern bool ogl_buf_init(Ogl_Buf *buf, Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
-  extern Ogl_Buf ogl_buf_make(Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
-  extern void ogl_buf_deinit(Ogl_Buf *buf);
+  bool ogl_buf_update(Ogl_Buf *buf, uint64_t offset, void *data, uint32_t count, uint32_t bytes_per_elem);
+  bool ogl_buf_init(Ogl_Buf *buf, Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
+  Ogl_Buf ogl_buf_make(Ogl_Buf_Kind kind, Ogl_Buf_Hint hint, void *data, uint32_t count, uint32_t bytes_per_elem);
+  void ogl_buf_deinit(Ogl_Buf *buf);
 
-  extern bool ogl_shader_init(Ogl_Shader *shader, const char* vertex_source, const char* fragment_source);
-  extern Ogl_Shader ogl_shader_make(const char* vertex_source, const char* fragment_source);
-  extern void ogl_shader_deinit(Ogl_Shader *shader);
+  bool ogl_shader_init(Ogl_Shader *shader, const char* vertex_source, const char* fragment_source);
+  Ogl_Shader ogl_shader_make(const char* vertex_source, const char* fragment_source);
+  void ogl_shader_deinit(Ogl_Shader *shader);
 
-  extern bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params);
-  extern Ogl_Tex ogl_tex_make(u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params);
-  extern void ogl_tex_deinit(Ogl_Tex *tex);
+  bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params);
+  void ogl_tex_update(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params);
+  Ogl_Tex ogl_tex_make(u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params);
+  void ogl_tex_deinit(Ogl_Tex *tex);
 
-  extern void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t vertex_count, uint32_t instance_count);
-  extern void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle);
+  void ogl_render_bundle_draw(Ogl_Render_Bundle *bundle, Ogl_Prim_Type prim, uint32_t vertex_count, uint32_t instance_count);
+  void ogl_render_bundle_destroy(Ogl_Render_Bundle *bundle);
 
-  extern void ogl_render_target_init(Ogl_Render_Target *rt, u32 w, u32 h, u32 attachment_count, Ogl_Tex_Format format, bool add_depth);
-  extern Ogl_Render_Target ogl_render_target_make(u32 w, u32 h, u32 attachment_count, Ogl_Tex_Format format, bool add_depth);
-  extern void ogl_render_target_deinit(Ogl_Render_Target *rt);
+  void ogl_render_target_init(Ogl_Render_Target *rt, u32 w, u32 h, u32 attachment_count, Ogl_Tex_Format format, bool add_depth);
+  Ogl_Render_Target ogl_render_target_make(u32 w, u32 h, u32 attachment_count, Ogl_Tex_Format format, bool add_depth);
+  void ogl_render_target_deinit(Ogl_Render_Target *rt);
 
-  // TODO: remove this!
-  //extern rect ogl_to_gl_rect(rect r, f32 screen_height);
 #else
 
 // This is complete bullshit, WHY do I need to make a vao at startup on MODERN opengl??????
@@ -454,6 +453,25 @@ static GLint ogl_tex_format_component_num(Ogl_Tex_Format format) {
   }
 }
 
+
+void ogl_tex_update(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
+  GLenum type = (ogl_tex_format_is_floating_point(tex->format)) ? GL_FLOAT : GL_UNSIGNED_BYTE;
+  GLint internal_format = ogl_tex_format_to_gl_internal_format(tex->format);
+  GLenum image_format = internal_format;
+
+  // This is pretty much a hack to make depth buffers easily w/ this
+  if (params.is_depth) {
+    type = GL_UNSIGNED_INT_24_8;
+    internal_format = GL_DEPTH24_STENCIL8;
+    image_format = GL_DEPTH_STENCIL;
+  }
+
+  glTexImage2D(GL_TEXTURE_2D, 0, internal_format, w, h, 0, image_format, type, data);
+  if (params.generate_mips) {
+    glGenerateMipmap(GL_TEXTURE_2D);
+  }
+}
+
 bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
   tex->params = params;
   tex->width = w;
@@ -469,6 +487,7 @@ bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, O
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ogl_to_gl_tex_filter(tex->params.min_filter));
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ogl_to_gl_tex_filter(tex->params.mag_filter));
 
+  //----------------------------------------------------------------
   // WebGL2 doesn't support texture swizzles.. so.. we do nothing here !!!! ???? @@@@
   // https://registry.khronos.org/webgl/specs/latest/2.0/#5.18
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -480,21 +499,7 @@ bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, O
 #endif
   //----------------------------------------------------------------
 
-  bool is_floating_point = ogl_tex_format_is_floating_point(tex->format);
-  GLenum type = (is_floating_point) ? GL_FLOAT : GL_UNSIGNED_BYTE;
-  type = (params.is_depth) ? GL_UNSIGNED_INT_24_8 : type;
-
-  GLint internal_format = ogl_tex_format_to_gl_internal_format(tex->format);
-  internal_format = (params.is_depth) ? GL_DEPTH24_STENCIL8 : internal_format;
-
-  GLenum image_format = internal_format;
-  image_format = (params.is_depth) ? GL_DEPTH_STENCIL: image_format;
-
-  glTexImage2D(GL_TEXTURE_2D, 0, internal_format, w, h, 0, image_format, type, data);
-
-  if (params.generate_mips) {
-    glGenerateMipmap(GL_TEXTURE_2D);
-  }
+  ogl_tex_update(tex, data, w, h, format, params);
 
   tex->impl_state = texture_id;
   assert(tex->impl_state);
@@ -502,6 +507,7 @@ bool ogl_tex_init(Ogl_Tex *tex, u8 *data, u32 w, u32 h, Ogl_Tex_Format format, O
   return (tex->impl_state != 0);
 }
 
+// Is this really needed? I don't really need it :|
 Ogl_Tex ogl_tex_make(u8 *data, u32 w, u32 h, Ogl_Tex_Format format, Ogl_Tex_Params params) {
   Ogl_Tex tex = {};
   ogl_tex_init(&tex, data, w, h, format, params);

@@ -1,5 +1,9 @@
+#define INPUT_IMPLEMENTATION
+#include "core/input.h"
+
 #include "game.h"
 #include "gui/gui.h"
+
 
 // TODO: Move to a better 2D renderer that can do arbitrary polygons not just AABBS rotated?
 // TODO: lookup a good fzf pipeline to be able to search
@@ -15,6 +19,9 @@ void game_update(Game_State *gs, float dt) {
     gui_initialized = true;
   }
   gs->game_viewport = rec(0,0,gs->screen_dim.x, gs->screen_dim.y);
+  if (input_win_resized(&gs->input)) {
+    printf("Screen resize!\n");
+  }
 }
 
 

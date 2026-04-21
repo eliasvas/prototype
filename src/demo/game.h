@@ -4,6 +4,9 @@
 #include "base/base_inc.h"
 #include "core/core_inc.h"
 
+// TODO: Input should be a pointer right??
+// Allocated along with game state!
+
 typedef struct {
   s32 current_sine_sample; // not needed
   s32 sample_rate;
