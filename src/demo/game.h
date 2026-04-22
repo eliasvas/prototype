@@ -29,6 +29,7 @@ typedef struct {
   Input input;
   R2D_Cmd_Chunk_List cmd_list;
   Game_Audio_Output_Buffer audio_out;
+  u32* pixels;
 
   // Loaded Asset resources (TODO: Asset system)
   Ogl_Tex atlas;

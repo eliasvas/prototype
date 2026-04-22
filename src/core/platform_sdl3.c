@@ -143,6 +143,8 @@ void platform_unload_game_api(Game_Api *api) {
  
 }
 
+Ogl_Tex g_backbuffer;
+
 SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   TIME_FUNC;
 
@@ -250,6 +252,10 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   gs->font = font_util_load_default_atlas(gs->persistent_arena, 64, 1024, 1024);
   stbi_image_free(image.data);
 
+  //---------------------------------------------------------------------------
+  // software renderer WIP
+  g_backbuffer = ogl_tex_make(nullptr,0,0,OGL_TEX_FORMAT_RGBA8U,(Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
+  //---------------------------------------------------------------------------
 
 #if (ARCH_WASM64 || ARCH_WASM32)
   // On WASM we just load the functions..
@@ -279,6 +285,9 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
   } else if (event->type == SDL_EVENT_WINDOW_RESIZED) {
     // Update Game_State with new window dimensions
     sdl_state->gs.screen_dim = v2m(event->window.data1, event->window.data2);
+    input_event.evt = (Input_Event){
+      .kind = INPUT_EVENT_KIND_RESIZE,
+    };
   } else if (event->type == SDL_EVENT_MOUSE_MOTION) {
     v2 mouse_pos = v2m(event->motion.x, event->motion.y);
     input_event.evt = (Input_Event){
@@ -306,10 +315,6 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
         .is_down = (event->type == SDL_EVENT_KEY_DOWN),
       },
       .kind = INPUT_EVENT_KIND_KEEB,
-    };
-  } else if (event->type == SDL_EVENT_WINDOW_RESIZED) {
-    input_event.evt = (Input_Event){
-      .kind = INPUT_EVENT_KIND_RESIZE,
     };
   }
   input_push_event(&sdl_state->gs.input, sdl_state->gs.frame_arena, &input_event.evt);
@@ -344,9 +349,35 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
   sdl_state->gs.audio_out.samples_requested = needed_samples;
   sdl_state->gs.audio_out.samples = samples_to_write;
 
+
+  sdl_state->gs.pixels = arena_push(sdl_state->gs.frame_arena, sizeof(u32)*sdl_state->gs.screen_dim.x*sdl_state->gs.screen_dim.y);
   // Do actual game's update and render
   game_api.update(&sdl_state->gs, sdl_state->dt);
   game_api.render(&sdl_state->gs, sdl_state->dt);
+
+  //---------------------------------------------------------------------------
+  // software renderer WIP
+  //if (input_win_resized(&sdl_state->gs.input)) {
+    ogl_tex_update(&g_backbuffer, (u8*)sdl_state->gs.pixels, sdl_state->gs.screen_dim.x, sdl_state->gs.screen_dim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
+  //}
+  Game_State *gs = &sdl_state->gs; 
+  R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs->game_viewport };
+  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs->game_viewport };
+  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  //cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(gs->game_viewport.w/2.0, gs->game_viewport.h/2.0), .origin = v2m(0,0), .zoom = gs->zoom, .rot_deg = 0} };
+  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_CAMERA, .c = (R2D_Cam){ .offset = v2m(0,0), .origin = v2m(0,0), .zoom = 1.0, .rot_deg = 0} };
+  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  R2D_Quad quad = (R2D_Quad) {
+      .src_rect = rec(0,0,gs->screen_dim.x,gs->screen_dim.y),
+      .dst_rect = rec(0,0,gs->screen_dim.x,gs->screen_dim.y),
+      .c = col(1,1,1,0.5),
+      .tex = g_backbuffer,
+      .rot_deg = 0,
+  };
+  cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
+  r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
+  //---------------------------------------------------------------------------
 
   // Do platform-side rendering of given commands, with r2d_begin/end + ogl
   r2d_render_cmds(sdl_state->gs.frame_arena, &sdl_state->gs.cmd_list);

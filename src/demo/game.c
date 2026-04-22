@@ -22,6 +22,13 @@ void game_update(Game_State *gs, float dt) {
   if (input_win_resized(&gs->input)) {
     printf("Screen resize!\n");
   }
+  for (s32 x = 0; x < (s32)gs->screen_dim.x; x+=1) {
+    for (s32 y = 0; y < (s32)gs->screen_dim.y; y+=1) {
+      u8 red = (u8)((x / (f32)gs->screen_dim.x) * 255.0);
+      gs->pixels[x + y * (s32)gs->screen_dim.y] = 
+        (0xff << 24) | (0xff << 16) | (0xff << 8) | (red << 0);
+    }
+  }
 }
 
 
@@ -54,7 +61,6 @@ void game_render(Game_State *gs, float dt) {
   cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
   r2d_push_cmd(gs->frame_arena, &gs->cmd_list, cmd, 256);
 
-
   // ..
   // ..
   // In the end, perform a UI pass (TBA)
@@ -62,6 +68,7 @@ void game_render(Game_State *gs, float dt) {
   static u32 squish_count = 0;
   if (input_mkey_pressed(&gs->input, INPUT_MOUSE_RMB)) {
     squish_count+=1;
+    printf("RMB\n");
   }
   gui_frame_begin(gs->screen_dim, &gs->input, &gs->cmd_list, dt);
 

@@ -186,6 +186,7 @@ typedef struct {
   v2 input_get_mouse_delta(Input *input);
   v2 input_get_scroll_delta(Input *input);
 
+  b32 input_win_resized(Input *input);
 #else
 
   // TODO: Gamepad Events
