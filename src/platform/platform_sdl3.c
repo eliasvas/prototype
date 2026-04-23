@@ -21,9 +21,12 @@
 
 #include <GL/glew.h>
 #define OGL_IMPLEMENTATION
-#include "ogl.h"
+#include "core/ogl.h"
 
+#if !(ARCH_WASM64 || ARCH_WASM32)
 #define INPUT_IMPLEMENTATION
+#endif
+
 #include "core/input.h"
 
 #include "game.h"

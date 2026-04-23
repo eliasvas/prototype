@@ -231,7 +231,7 @@ static f64 pwr(double b, int e) {
 #endif
 
 #define INLINE static inline
-#define internal static
+#define INTERNAL static
 #define global_var static
 
 //////////////////////////////
@@ -313,18 +313,18 @@ static u32 cstr_len(char *s) {
 }
 
 static b32 str_cmp(char *l, char *r, s64 size) {
-  if (!l || !r) return false;
+  if (!l || !r) return 0;
   for (s64 idx = 0; idx < size; idx++) {
-    if (l[idx] != r[idx]) return false;
+    if (l[idx] != r[idx]) return 0;
   }
-  return true;
+  return 1;
 }
 
 static b32 str_find(char *s, char c, s64 size) {
   for (s64 idx = 0; idx < size; idx++) {
-    if (s[idx] == c) return true;
+    if (s[idx] == c) return 1;
   }
-  return false;
+  return 0;
 }
 
 static s64 str_to_int(char *s, s64 size) {
@@ -417,7 +417,7 @@ static f64 buf_to_float(buf b) {
   return str_to_float(b.data, b.count);
 }
 
-static bool buf_to_bool(buf b) {
+static b32 buf_to_bool(buf b) {
   return str_to_bool(b.data, b.count);
 }
 

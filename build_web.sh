@@ -39,6 +39,7 @@ EMCC_DEBUG=1 $EMCC -v \
   $CFLAGS $OPT_FLAGS $INCLUDES \
   -Lbuild \
   src/core/*.c \
+  src/platform/platform_sdl3.c \
   -lgame \
   -o build/index.html \
   -Wl,-rpath='build/' \

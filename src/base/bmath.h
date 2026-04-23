@@ -294,26 +294,26 @@ static rect rec(f32 x, f32 y, f32 w, f32 h) {
 static rect rec_centered(v2 center, v2 hdim) {
   return (rect){{center.x-hdim.x, center.y-hdim.y, hdim.x*2, hdim.y*2}};
 }
-static bool rect_isect_point(rect r, v2 p) {
+static b32 rect_isect_point(rect r, v2 p) {
   return ((p.x >= r.x) && (p.x <= r.x+r.w)) && ((p.y >= r.y) && (p.y <= r.y+r.h));
 }
 
 /*
-static bool rect_isect_rect(rect l, rect r) {
+static b32 rect_isect_rect(rect l, rect r) {
   return (rect_isect_point(l, v2m(r.x,     r.y)) ||
           rect_isect_point(l, v2m(r.x+r.w, r.y)) ||
           rect_isect_point(l, v2m(r.x,     r.y+r.h)) ||
           rect_isect_point(l, v2m(r.x+r.w, r.y+r.h)));
 }
 */
-static bool rect_isect_rect(rect a, rect b) {
+static b32 rect_isect_rect(rect a, rect b) {
     return !(a.x + a.w < b.x ||
              b.x + b.w < a.x ||
              a.y + a.h < b.y ||
              b.y + b.h < a.y);
 }
 
-static bool rect_inside_rect(rect b, rect s) {
+static b32 rect_inside_rect(rect b, rect s) {
   return (rect_isect_point(b, v2m(s.x,     s.y)) &&
           rect_isect_point(b, v2m(s.x+s.w, s.y)) &&
           rect_isect_point(b, v2m(s.x,     s.y+s.h)) &&
@@ -378,7 +378,7 @@ static rect rect_fit_inside(rect src, rect dest, Rect_Fit_Mode mode) {
   };
 }
 
-static bool rect_equals(rect l, rect r) { return (equalf(l.x,r.x,0.01) && equalf(l.y,r.y,0.01) && equalf(l.w,r.w,0.01) && equalf(l.h,r.h,0.01)); }
+static b32 rect_equals(rect l, rect r) { return (equalf(l.x,r.x,0.01) && equalf(l.y,r.y,0.01) && equalf(l.w,r.w,0.01) && equalf(l.h,r.h,0.01)); }
 static rect rect_bl_to_tl(rect r, f32 screen_height) { return rec(r.x, screen_height - r.y - r.h, r.w, r.h); }
 
 

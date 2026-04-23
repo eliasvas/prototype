@@ -5,7 +5,7 @@
 #include "ogl.h"
 #include "r2d.h"
 #include "input.h"
-#include "effects.h"
+//#include "effects.h"
 #include "font_util.h"
 #include "json_util.h"
 #include "audio_util.h"

@@ -14,7 +14,8 @@ typedef struct {
   u64 committed;
 } Arena;
 
-static_assert(sizeof(Arena) < ARENA_DEFAULT_CHUNK_SIZE);
+// AFAIK only C23 feature, we do C99 now :|
+// static_assert(sizeof(Arena) < ARENA_DEFAULT_CHUNK_SIZE);
 
 static void arena_align_forward(Arena *arena) {
   arena->current = align_pow2(UINT_FROM_PTR(arena->backing_memory) + arena->current, arena->alignment) - UINT_FROM_PTR(arena->backing_memory);
