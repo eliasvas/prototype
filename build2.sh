@@ -43,14 +43,15 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 
-CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum \
-  -pedantic -fno-exceptions -fstack-protector -g -fsanitize=address"
+#CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g -fsanitize=address"
+CFLAGS="-Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wswitch-enum  -pedantic -fno-exceptions -fstack-protector -g"
 CC="clang"
 
 source "build_common.sh"
 
-export ASAN_OPTIONS=detect_stack_use_after_return=1
-export LSAN_OPTIONS=suppressions=lsan_ignore.txt
+#export ASAN_OPTIONS=detect_stack_use_after_return=1
+#export LSAN_OPTIONS=suppressions=lsan_ignore.txt
+#export LSAN_OPTIONS=verbosity=1:log_threads=1
 
 # -----------------------------
 # Build the game shared library
@@ -58,16 +59,17 @@ export LSAN_OPTIONS=suppressions=lsan_ignore.txt
 echo "Building game..."
 
 CFLAGS="${CFLAGS:-} -std=gnu23"
-CLIBS="-lX11 -lGL -lGLEW -lXrandr"
+#@TODO: remove -lgame we NEED the reload ok?! only for release builds this bullshit
+CLIBS="-lX11 -lGL -lGLEW -lXrandr -lm -lgame"
 
 DEBUG_FLAGS="-O0 -g"
 RELEASE_FLAGS="-O2"
 INCLUDE_DIRS="-Iext -I$ENGINE_DIR/src"
 
-$CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared \
+$CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared -lm \
 "$GAME_DIR"/*.c \
 "$ENGINE_DIR"/src/gui/*.c \
--o "$OUTPUT_DIR/game.so"
+-o "$OUTPUT_DIR/libgame.so"
 
 [ $? -eq 0 ] && echo "Game Build succeeded. ✅" || { echo "Game Build failed. ❌"; exit 1; }
 
@@ -78,13 +80,15 @@ echo "Building engine..."
 
 pushd "$ENGINE_DIR" > /dev/null
 
+#@TODO: investigate Wl rpath stuff a bit more ok?
 $CC $CFLAGS $DEBUG_FLAGS \
     -Iext -Isrc -I"$GAME_DIR" \
+    -L"$OUTPUT_DIR" \
     src/core/*.c \
     src/platform/platform_rgfw.c \
     -o "$OUTPUT_DIR/prototype" \
-    -L"$OUTPUT_DIR" \
-    $CLIBS
+    $CLIBS \
+    -Wl,-rpath,'$ORIGIN'
 
 popd > /dev/null
 
