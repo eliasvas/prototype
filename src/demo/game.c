@@ -19,9 +19,9 @@ void game_update(Game_State *gs, float dt) {
     gui_initialized = true;
   }
   gs->game_viewport = rec(0,0,gs->screen_dim.x, gs->screen_dim.y);
-  if (input_win_resized(&gs->input)) {
-    printf("Screen resize!\n");
-  }
+
+  //if (input_win_resized(&gs->input)) { printf("Screen resize!\n"); }
+
   for (s32 x = 0; x < (s32)gs->screen_dim.x; x+=1) {
     for (s32 y = 0; y < (s32)gs->screen_dim.y; y+=1) {
       u8 red = (u8)((x / (f32)gs->screen_dim.x) * 255.0);
@@ -70,6 +70,7 @@ void game_render(Game_State *gs, float dt) {
     squish_count+=1;
     printf("RMB\n");
   }
+
   gui_frame_begin(gs->screen_dim, &gs->input, &gs->cmd_list, dt);
 
 	gui_set_next_child_layout_axis(GUI_AXIS_X);

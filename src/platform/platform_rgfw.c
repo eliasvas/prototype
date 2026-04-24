@@ -30,70 +30,15 @@
 #include <RGFW/RGFW.h>
 
 u64 platform_read_cpu_timer() {
-  //return SDL_GetPerformanceCounter();
-  return 0;
+  return get_time_ns();
 }
 
 u64 platform_read_cpu_freq() {
-  //return SDL_GetPerformanceFrequency();
-  return 0;
-}
-
-u64 platform_get_ticks_since_epoch() {
-  /*
-  SDL_Time ticks = {};
-  SDL_GetCurrentTime(&ticks);
-  return (u64)ticks;
-  */
-  return 0;
+  return get_nano_freq();
 }
 
 f64 platform_get_time() {
-  return 0;
-  //return (f64)SDL_GetTicksNS() / 1000000000.0;
-}
-
-int main2() {
-  RGFW_window* win = RGFW_createWindow("a window", 0, 0, 800, 600, RGFW_windowCenter | RGFW_windowNoResize | RGFW_windowOpenGL);
-  RGFW_window_swapInterval_OpenGL(win, 1);
-  s32 mouseX, mouseY;
-  while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
-    RGFW_event event;
-    while (RGFW_window_checkEvent(win, &event)) {
-
-      if (event.type == RGFW_mouseButtonPressed && event.button.value == RGFW_mouseLeft) {
-        RGFW_window_getMouse(win, &mouseX, &mouseY);
-        printf("You clicked at x: %d, y: %d\n", mouseX, mouseY);
-      } else if (event.key.value == RGFW_keyEscape) {
-          printf("EsFuckingCape?!\n");
-          RGFW_window_setShouldClose(event.common.win, 1);
-      }
-    }
-
-    if (RGFW_isMousePressed(RGFW_mouseRight)) {
-      printf("The right mouse button was clicked at x: %d, y: %d\n", mouseX, mouseY);
-    }
-  }
-
-  RGFW_window_close(win);
-  return 0;
-}
-
-
-GLuint load_shader(const char *shaderSource, GLenum type) {
-  GLuint shader = glCreateShader(type);
-  glShaderSource(shader, 1, &shaderSource, NULL);
-  glCompileShader(shader);
-
-  GLint success;
-  glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-  if (!success) {
-    char infoLog[512];
-    glGetShaderInfoLog(shader, 512, NULL, infoLog);
-    printf("Shader Compile Error: %s\n", infoLog);
-  }
-
-  return shader;
+  return (f64)get_time_ns() / 1000000000.0;
 }
 
 typedef struct {
@@ -102,7 +47,6 @@ typedef struct {
   u64 height;
 } Platform_Image_Data;
 Platform_Image_Data platform_load_image_bytes_as_rgba(const char *filepath);
-
 
 Platform_Image_Data platform_load_image_bytes_as_rgba(const char *filepath) {
   Platform_Image_Data img_data = {};
@@ -119,6 +63,10 @@ Platform_Image_Data platform_load_image_bytes_as_rgba(const char *filepath) {
 }
 
 int main(void) {
+
+  profiler_begin();
+  BRAND_SEED(1231231);
+
   Game_Api game_api = {};
   // Dummy Game_Api initialization
   // @TODO: Try to do the game reloading thingy
@@ -137,6 +85,7 @@ int main(void) {
   RGFW_window_createContext_OpenGL(win, hints);
   RGFW_window_show(win);
   RGFW_window_setExitKey(win, RGFW_keyEscape);
+  RGFW_window_swapInterval_OpenGL(win, 1);
   const GLubyte *version = glGetString(GL_VERSION);
   printf("OpenGL Version: %s\n", version);
 
@@ -162,19 +111,63 @@ int main(void) {
 
   game_api.init(&gs);
 
-  float dt = 1.0f/60.0f;
-
+  f64 dt = 1.0/60.0;
+  u64 frame_start = platform_get_time();
 
   while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
     arena_clear(gs.frame_arena);
     RGFW_event event;
     while (RGFW_window_checkEvent(win, &event)) {
-      // TBD
+      Input_Event_Node input_event = {};
+      switch(event.type) {
+        case RGFW_windowResized:
+          gs.screen_dim = v2m(event.update.w, event.update.h);
+          input_event.evt = (Input_Event){
+            .kind = INPUT_EVENT_KIND_RESIZE,
+          };
+          break;
+        case RGFW_mousePosChanged:
+          v2 new_mp = v2m(event.mouse.x, event.mouse.y);
+          input_event.evt = (Input_Event){
+            .data.mme = (Input_MouseMotion_Event) { .mouse_pos = new_mp },
+            .kind = INPUT_EVENT_KIND_MOUSEMOTION,
+          };
+          break;
+        case RGFW_keyPressed:
+        case RGFW_keyReleased:
+          if (event.key.repeat == 1) continue;
+          //b32 pressed = event.key.state;
+          s32 value = event.key.value;
+          s32 scancode = 0;
+          // @TODO: More keys mapped needed here please
+          if (value >= 'A' && value <= 'Z') scancode = KEY_SCANCODE_A + (value-'A');
+          else if (value >= '0' && value < '9') scancode = (value == '0') ? KEY_SCANCODE_0 : KEY_SCANCODE_1 + (value - '1');
+          input_event.evt = (Input_Event){
+            .data.ke = (Input_Keeb_Event) {
+              .scancode = (Key_Scancode)scancode,
+              .is_down = (event.type == RGFW_keyPressed),
+            },
+            .kind = INPUT_EVENT_KIND_KEEB,
+          };
+          break;
+        case RGFW_mouseButtonPressed:
+        case RGFW_mouseButtonReleased:
+          b32 button_idx = event.button.value;
+          if (button_idx >= INPUT_MOUSE_COUNT) continue; // no handling
+          input_event.evt = (Input_Event){
+            .data.me = (Input_Mouse_Event) {
+              .button = (Input_Mouse_Button)(button_idx),
+              .is_down = (event.type == RGFW_mouseButtonPressed),
+            },
+            .kind = INPUT_EVENT_KIND_MOUSE,
+          };
+          break;
+        default:
+          continue;
+          break;
+      }
+      input_push_event(&gs.input, gs.frame_arena, &input_event.evt);
     }
-
-    // HACK
-    gs.time_sec+=dt/10.0;
-    // -----
 
     input_process_events(&gs.input);
     arena_clear(gs.frame_arena);
@@ -204,7 +197,18 @@ int main(void) {
     r2d_render_cmds(gs.frame_arena, &gs.cmd_list);
 
     RGFW_window_swapBuffers_OpenGL(win);
+
+    // @TODO: cleanup a bit of funky logic also stop vsyncing always
+    // Perform timings (Should this happen before swap window maybe?)
+    u64 frame_end = platform_read_cpu_timer();
+    dt = (frame_end - frame_start) / (f64)get_nano_freq();
+    //printf("fps=%f begin=%f end=%f\n", 1.0/dt, (f32)frame_start, (f32)frame_end);
+    frame_start = platform_read_cpu_timer();
+    gs.time_sec = platform_get_time();
+
+    input_end_frame(&gs.input);
   }
+  profiler_end_and_print();
 
   RGFW_window_close(win);
   return 0;

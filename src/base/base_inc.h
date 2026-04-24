@@ -9,5 +9,6 @@
 #include "color.h"
 #include "easing.h"
 #include "brand.h"
+#include "time_util.h"
 
 #endif

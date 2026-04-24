@@ -80,7 +80,6 @@ echo "Building engine..."
 
 pushd "$ENGINE_DIR" > /dev/null
 
-#@TODO: investigate Wl rpath stuff a bit more ok?
 $CC $CFLAGS $DEBUG_FLAGS \
     -Iext -Isrc -I"$GAME_DIR" \
     -L"$OUTPUT_DIR" \
