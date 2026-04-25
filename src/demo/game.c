@@ -1,4 +1,4 @@
-#define INPUT_IMPLEMENTATION
+//#define INPUT_IMPLEMENTATION
 #include "core/input.h"
 
 #include "game.h"
