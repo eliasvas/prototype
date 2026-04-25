@@ -2,9 +2,6 @@
 #include <stdbool.h>
 #include <assert.h>
 
-// TODO: time util, don't be platform specific mybe just use cstdlib? think about this
-// TODO: glew still used, write our own util ok?
-
 #define BRAND_IMPLEMENTATION
 #define PROFILER_IMPLEMENTATION
 #include "base/base_inc.h"
@@ -15,7 +12,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 
-#include <GL/glew.h>
+
+#if (ARCH_WASM64 || ARCH_WASM32)
+#include <GLES3/gl3.h>
+#else
+#include "gl_loader.h"
+#endif
+
 #define OGL_IMPLEMENTATION
 #include "core/ogl.h"
 
@@ -27,6 +30,10 @@
 #define RGFW_DEBUG
 #define RGFW_IMPLEMENTATION
 #define RGFW_OPENGL
+#define RGFW_ALLOC_DROPFILES
+#define RGFW_PRINT_ERRORS
+#define RGFW_DEBUG
+#define GL_SILENCE_DEPRECATION
 #include <RGFW/RGFW.h>
 
 u64 platform_read_cpu_timer() {
@@ -70,6 +77,11 @@ Ogl_Tex g_backbuffer = {};
 Game_State gs = {};
 
 void loop() {
+
+#if !(ARCH_WASM64 || ARCH_WASM32)
+    ogl_clear(col(0,0,0.0,1.0));
+#endif
+
     arena_clear(gs.frame_arena);
     RGFW_event event;
     while (RGFW_window_checkEvent(win, &event)) {
@@ -167,7 +179,12 @@ void loop() {
 
     r2d_render_cmds(gs.frame_arena, &gs.cmd_list);
 
+    // FIXME: Is this even allowed on emscripten???
+#if !(ARCH_WASM64 || ARCH_WASM32)
     RGFW_window_swapBuffers_OpenGL(win);
+#endif
+
+    // ---------------------------------------------
 
     // @TODO: cleanup a bit of funky logic also stop vsyncing always
     // Perform timings (Should this happen before swap window maybe?)
@@ -183,6 +200,7 @@ void loop() {
 int main(void) {
 
   profiler_begin();
+  // @FIXME!!
   BRAND_SEED(1231231);
 
 #if 1
@@ -204,7 +222,7 @@ int main(void) {
 
   RGFW_glHints* hints = RGFW_getGlobalHints_OpenGL();
 
-#if (WASM64 || WASM32)
+#if !(ARCH_WASM64 || ARCH_WASM32)
   hints->major = 3;
   hints->minor = 0;
   hints->profile = RGFW_glES;
@@ -212,6 +230,7 @@ int main(void) {
   hints->major = 4;
   hints->minor = 3;
 #endif
+
   RGFW_setGlobalHints_OpenGL(hints);
 
   win = RGFW_createWindow("window", 0, 0, 800, 600, RGFW_windowCenter | RGFW_windowNoResize | RGFW_windowHide);
@@ -227,7 +246,13 @@ int main(void) {
   gs.frame_arena = arena_make(MB(256));
   gs.screen_dim = v2m(800, 600);
 
-  glewInit();
+#if !(ARCH_WASM64 || ARCH_WASM32)
+  if (GL_loadGL((GLloadfunc)RGFW_getProcAddress_OpenGL)) {
+      printf("Failed to load OpenGL functions\n");
+      return -1;
+  }
+#endif
+
   ogl_init(); // To create the bullshit empty VAO opengl side, nothing else
   gs.red = ogl_tex_make((u8[]){250,90,72,255}, 1,1, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
   Platform_Image_Data image = platform_load_image_bytes_as_rgba("data/microgue.png");
@@ -245,11 +270,12 @@ int main(void) {
   dt = 1.0/60.0;
   frame_start = platform_get_time();
 
-#if (WASM64 || WASM32)
+#if (ARCH_WASM64 || ARCH_WASM32)
   emscripten_set_main_loop(loop, 0, 1);
 #else
   while (RGFW_window_shouldClose(win) == RGFW_FALSE) { loop(); }
 #endif
+
   //profiler_end_and_print();
   //RGFW_window_close(win);
   return 0;

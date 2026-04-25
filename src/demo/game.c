@@ -69,6 +69,7 @@ void game_render(Game_State *gs, float dt) {
   if (input_mkey_pressed(&gs->input, INPUT_MOUSE_RMB)) {
     squish_count+=1;
     printf("RMB\n");
+    ogl_clear(col(0.5,0.5,0.0,1.0));
   }
 
   gui_frame_begin(gs->screen_dim, &gs->input, &gs->cmd_list, dt);

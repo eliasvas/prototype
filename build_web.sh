@@ -11,14 +11,18 @@ OPT_FLAGS="${OPT_FLAGS:- -O1}"
 INCLUDES="-Iext -Isrc -Isrc/demo"
 
 EM_FLAGS="\
--s USE_SDL=3 \
 -s DISABLE_EXCEPTION_CATCHING=1 \
 -s WASM=1 \
 -s ALLOW_MEMORY_GROWTH=1 \
 -s NO_EXIT_RUNTIME=0 \
 -s ASSERTIONS=1 \
+-s USE_WEBGL2=1 \
+-s MIN_WEBGL_VERSION=2 \
+-s MAX_WEBGL_VERSION=2 \
 -s FULL_ES3=1 \
+-s ASYNCIFY \
 -s GL_DEBUG=1"
+
 
 LDFLAGS="${LDFLAGS:-}"
 
@@ -39,7 +43,7 @@ EMCC_DEBUG=1 $EMCC -v \
   $CFLAGS $OPT_FLAGS $INCLUDES \
   -Lbuild \
   src/core/*.c \
-  src/platform/platform_sdl3.c \
+  src/platform/platform_rgfw.c \
   -lgame \
   -o build/index.html \
   -Wl,-rpath='build/' \

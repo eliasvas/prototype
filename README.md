@@ -2,8 +2,7 @@
 
 ## Deps
 ```terminal
-sudo dnf install git clang clang-devel SDL3 SDL3-devel glew glew-devel -y
-dnf debuginfo-install SDL3 #optional
+sudo dnf install git clang clang-devel -y
 git lfs install
 ```
 ## Cloning
