@@ -86,15 +86,15 @@ int main(void) {
     .shutdown = game_shutdown,
   };
 #else
+  Game_Api game_api = {};
   void *game_lib = dlopen("./build/libgame.so", RTLD_LAZY | RTLD_DEEPBIND);
   assert(game_lib);
-  Game_Api game_api = {};
   game_api.lib = game_lib;
   game_api.init = (game_init_fn)dlsym(game_lib, "game_init");
   game_api.update = (game_update_fn)dlsym(game_lib, "game_update");
   game_api.render = (game_render_fn)dlsym(game_lib, "game_render");
   game_api.shutdown = (game_shutdown_fn)dlsym(game_lib, "game_shutdown");
-#endif
+#endif // (ARCH_WASM64 || ARCH_WASM32 || 1)
 
   /////////////////////////////////////////////////////
   // 0. RGFW initialization (window + OpenGL)
@@ -108,7 +108,7 @@ int main(void) {
   hints->major = 4;
   hints->minor = 3;
   hints->profile = RGFW_glCompatibility;
-#endif
+#endif // (ARCH_WASM64 || ARCH_WASM32)
 
   RGFW_setGlobalHints_OpenGL(hints);
 
@@ -125,7 +125,7 @@ int main(void) {
       printf("Failed to load OpenGL functions\n");
       return -1;
   }
-#endif
+#endif // !(ARCH_WASM64 || ARCH_WASM32)
 
   /////////////////////////////////////////////////////
   // 1. Game_State initialization
@@ -146,41 +146,58 @@ int main(void) {
   stbi_image_free(image.data);
   gs.g_backbuffer = ogl_tex_make(nullptr,0,0,OGL_TEX_FORMAT_RGBA8U,(Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
   f64 dt = 1.0/60.0;
+  u64 frame_count = 0;
   game_api.init(&gs);
 
   /////////////////////////////////////////////////////
   // 2. Game Loop
   /////////////////////////////////////////////////////
   while (RGFW_window_shouldClose(win) == RGFW_FALSE) {
+    frame_count+=1;
     u64 frame_start = platform_read_cpu_timer();
 #if !(ARCH_WASM64 || ARCH_WASM32)
     ogl_clear(col(0,0,0.0,1.0));
-#endif
+#endif // !(ARCH_WASM64 || ARCH_WASM32)
     arena_clear(gs.frame_arena);
 
 
     /////////////////////////////////////////////////////
     // 2.1 Reloading logic (happens once every second/target_frames)
     /////////////////////////////////////////////////////
-#if 0
-    if (input_mkey_pressed(&gs.input, INPUT_MOUSE_MMB)) {
-      printf("reload!!\n");
+#if !(ARCH_WASM64 || ARCH_WASM32) 
+    if (frame_count % 60 == 0) {
       struct stat glib_stat;
       if (stat("build/libgame.so", &glib_stat) == -1) {
-        printf("couldn't stat libgame\n");
-      }
-      printf("mod time: %ld\n", glib_stat.st_mtim.tv_nsec);
-
-      dlclose(game_lib);
-      // sprintf_arena(..)
-      game_lib = dlopen("./build/libgame.so", RTLD_LAZY | RTLD_DEEPBIND);
-      assert(game_lib);
-      game_api.init = (game_init_fn)dlsym(game_lib, "game_init");
-      game_api.update = (game_update_fn)dlsym(game_lib, "game_update");
-      game_api.render = (game_render_fn)dlsym(game_lib, "game_render");
-      game_api.shutdown = (game_shutdown_fn)dlsym(game_lib, "game_shutdown");
-    }
+        printf("couldn't stat libgame.so\n");
+      } else {
+        s64 mod_time = glib_stat.st_mtim.tv_nsec;
+        if (game_api.last_modified != mod_time) {
+          static int reload_count = 0;
+          reload_count+=1;
+          // This is ugly as hell
+#if OS_WINDOWS
+          buf cp_cmd = arena_sprintf(gs.frame_arena, "copy build/libgame.so build/libgame_%d.so", reload_count);
+#else
+          buf cp_cmd = arena_sprintf(gs.frame_arena, "cp build/libgame.so build/libgame_%d.so", reload_count);
 #endif
+          system(cp_cmd.data);
+          buf glib_newpath = arena_sprintf(gs.frame_arena, "build/libgame_%d.so", reload_count);
+          if (game_api.lib) {
+            dlclose(game_api.lib);
+          }            
+          void *game_lib = dlopen(glib_newpath.data, RTLD_LAZY | RTLD_DEEPBIND);
+          assert(game_lib);
+          game_api.init = (game_init_fn)dlsym(game_lib, "game_init");
+          game_api.update = (game_update_fn)dlsym(game_lib, "game_update");
+          game_api.render = (game_render_fn)dlsym(game_lib, "game_render");
+          game_api.shutdown = (game_shutdown_fn)dlsym(game_lib, "game_shutdown");
+          game_api.lib = game_lib;
+          game_api.last_modified = mod_time;
+          printf("reload mod time: %ld\n", mod_time);
+        }
+      }
+    }
+#endif // !(ARCH_WASM64 || ARCH_WASM32) 
 
     /////////////////////////////////////////////////////
     // 2.2 Handling incoming events for the frame
@@ -247,7 +264,6 @@ int main(void) {
     game_api.update(&gs, dt);
     game_api.render(&gs, dt);
 
-#if 1
     /////////////////////////////////////////////////////
     // 2.4 Render the software rendered texture
     /////////////////////////////////////////////////////
@@ -268,7 +284,6 @@ int main(void) {
     };
     cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_ADD_QUAD, .q = quad};
     r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
-#endif
 
     /////////////////////////////////////////////////////
     // 2.5 Render all the quads (captured in game_render(..))
@@ -284,7 +299,7 @@ int main(void) {
     TIME_BLOCK("Swap Window");
     RGFW_window_swapBuffers_OpenGL(win);
   }
-#endif
+#endif // !(ARCH_WASM64 || ARCH_WASM32)
 
     /////////////////////////////////////////////////////
     // 2.7 EOF Timing stuff (dt/sleep/timecalc)
