@@ -22,6 +22,7 @@ void game_update(Game_State *gs, float dt) {
 
   //if (input_win_resized(&gs->input)) { printf("Screen resize!\n"); }
 
+#if 1
   for (s32 x = 0; x < (s32)gs->screen_dim.x; x+=1) {
     for (s32 y = 0; y < (s32)gs->screen_dim.y; y+=1) {
       u8 red = (u8)((x / (f32)gs->screen_dim.x) * 255.0);
@@ -29,6 +30,8 @@ void game_update(Game_State *gs, float dt) {
         (0xff << 24) | (0xff << 16) | (0xff << 8) | (red << 0);
     }
   }
+#endif
+
 }
 
 
