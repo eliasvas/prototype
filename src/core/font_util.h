@@ -6,7 +6,8 @@
 
 // TODO: LOD stuff and our own lookup data structure (Glyph_Cache?)
 // TODO: SDF font support
-
+// TODO: Maybe put the implementation in the C file?!?!
+//
 typedef struct {
   rect r;
   rect tc;
@@ -117,9 +118,10 @@ static void font_util_debug_draw_text(Font_Info *font_info, Arena *arena, R2D_Cm
     u8 c = text.data[i];
     Glyph_Info metrics = font_info->glyphs[c - font_info->first_codepoint];
     //r2d_push_quad(text_rend, (R2D_Quad) { .dst_rect = rec(baseline_pos.x+metrics.off.x*scale, baseline_pos.y+metrics.off.y*scale, metrics.r.w*scale, metrics.r.h*scale), .src_rect = rec(metrics.r.x, metrics.r.y, metrics.r.w, metrics.r.h), .c = col, .tex = font_info->atlas, });
+    f32 atlas_height = font_info->atlas.height;
     R2D_Quad quad = (R2D_Quad) {
         .dst_rect = rec(baseline_pos.x+metrics.off.x*scale, baseline_pos.y+metrics.off.y*scale, metrics.r.w*scale, metrics.r.h*scale),
-        .src_rect = rec(metrics.r.x, metrics.r.y, metrics.r.w, metrics.r.h),
+        .src_rect = rec(metrics.r.x, atlas_height - metrics.r.y - metrics.r.h, metrics.r.w, metrics.r.h),
         .c = col,
         .tex = font_info->atlas,
     };

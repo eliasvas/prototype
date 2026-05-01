@@ -56,7 +56,12 @@ void main() {
 
   f_color = v_color;
   f_tex_slot = v_tex_slot;
-  f_tc = src_rect.xy*vec2(1,-1) + tex_coords[gl_VertexID] * src_rect.zw - vec2(0, src_rect.w);
+
+  vec2 uv = tex_coords[gl_VertexID];
+  f_tc = src_rect.xy + uv * src_rect.zw;
+  //f_tc = src_rect.xy*vec2(1,-1) + uv * src_rect.zw - vec2(0, src_rect.w);
+
+  //f_tc = src_rect.xy*vec2(1,-1) + tex_coords[gl_VertexID] * src_rect.zw - vec2(0, src_rect.w);
 }
 )";
 
@@ -165,7 +170,7 @@ static R2D_Quad_Array rend_quad_chunk_list_to_array(Arena *arena, R2D_Quad_Chunk
 static void r2d_flush(R2D *rend, Batch_Vertex *vertices, u64 count) {
   u64 arena_prev_pos = arena_get_current_pos(rend->arena); 
   // We set the correct texture for each slot, if not found, we just assign a dummy white texture for debug purposes
-  for (u64 tex_idx = 0; tex_idx < rend->tex_array.cap; ++tex_idx) {
+  for (u64 tex_idx = 0; tex_idx < rend->tex_array.cap; tex_idx+=1) {
     buf sampler_name = arena_sprintf(rend->arena, "u_textures[%lu]", tex_idx);
 
     if (tex_idx < rend->tex_array.count) {

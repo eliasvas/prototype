@@ -3,6 +3,7 @@
 
 #include "game.h"
 #include "gui/gui.h"
+#include "frz/frz.h"
 
 
 // TODO: Move to a better 2D renderer that can do arbitrary polygons not just AABBS rotated?
@@ -22,16 +23,18 @@ void game_update(Game_State *gs, float dt) {
 
   //if (input_win_resized(&gs->input)) { printf("Screen resize!\n"); }
 
-#if 1
-  for (s32 x = 0; x < (s32)gs->screen_dim.x; x+=1) {
-    for (s32 y = 0; y < (s32)gs->screen_dim.y; y+=1) {
-      u8 red = (u8)((x / (f32)gs->screen_dim.x) * 255.0);
-      gs->pixels[x + y * (s32)gs->screen_dim.y] = 
-        (0xff << 24) | (0xff << 16) | (0xff << 8) | (red << 0);
-    }
-  }
-#endif
-
+  // TODO: screen_dim should become window_dim right?
+  frz_begin_frame(gs->pixels, gs->screen_dim);
+  frz_clear();
+  //frz_imm_line(v2m(0,0), v2m(200,300), col(1,1,1,1));
+  frz_imm_px(100,0, col(1,1,1,1));
+  frz_imm_px(100,100, col(1,1,1,1));
+  frz_imm_px(200,100, col(1,1,1,1));
+  frz_imm_px(300,100, col(1,1,1,1));
+  frz_imm_px(400,100, col(1,1,1,1));
+  frz_imm_px(500,100, col(1,1,1,1));
+  frz_imm_px(600,100, col(1,1,1,1));
+  frz_end_frame();
 }
 
 
@@ -55,7 +58,8 @@ void game_render(Game_State *gs, float dt) {
 
 
   R2D_Quad quad = (R2D_Quad) {
-      .src_rect = rec(16*4,0,8,8),
+      //.src_rect = rec(9*8,0*8,8,8),
+      .src_rect = rec(8*8,1*8,8,8),
       .dst_rect = rec(screen_mp.x - hero_w*0.5, screen_mp.y - hero_w*0.5, hero_w, hero_w),
       .c = col(1,1,1,1),
       .tex = gs->atlas,

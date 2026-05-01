@@ -46,6 +46,8 @@ Font_Info font_util_load_default_atlas(Arena *arena, u32 glyph_height_in_px, u32
       .w = pc.x1 - pc.x0,
       .h = pc.y1 - pc.y0,
     };
+
+    // w/h = atlas_width atlas_height
     // NOTE: Not sure if this one is needed..
     font.glyphs[glyph_idx].tc = (rect){
       .x = ac.s0,

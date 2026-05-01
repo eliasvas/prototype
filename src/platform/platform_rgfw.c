@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <assert.h>
-
 #include <sys/stat.h>
 
 #define BRAND_IMPLEMENTATION
@@ -13,7 +12,6 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
-
 
 #if (ARCH_WASM64 || ARCH_WASM32)
 #include <GLES3/gl3.h>
@@ -107,7 +105,8 @@ int main(void) {
 #else
   hints->major = 4;
   hints->minor = 3;
-  hints->profile = RGFW_glCompatibility;
+  //hints->profile = RGFW_glCompatibility;
+  hints->profile = RGFW_glCore;
 #endif // (ARCH_WASM64 || ARCH_WASM32)
 
   RGFW_setGlobalHints_OpenGL(hints);
@@ -140,7 +139,8 @@ int main(void) {
   assert(image.width > 0);
   assert(image.height > 0);
   assert(image.data != nullptr);
-  gs.atlas = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT});
+  //gs.atlas = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT, .wrap_t = OGL_TEX_WRAP_MODE_REPEAT});
+  gs.atlas = ogl_tex_make(image.data, image.width, image.height, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
   gs.atlas_sprites_per_dim = v2m(16,10);
   gs.font = font_util_load_default_atlas(gs.persistent_arena, 64, 1024, 1024);
   stbi_image_free(image.data);
@@ -222,7 +222,6 @@ int main(void) {
         case RGFW_keyPressed:
         case RGFW_keyReleased:
           if (event.key.repeat == 1) continue;
-          //b32 pressed = event.key.state;
           s32 value = event.key.value;
           s32 scancode = 0;
           // @TODO: More keys mapped needed here please
@@ -263,11 +262,11 @@ int main(void) {
     gs.pixels = arena_push(gs.frame_arena, sizeof(u32)*gs.screen_dim.x*gs.screen_dim.y);
     game_api.update(&gs, dt);
     game_api.render(&gs, dt);
+    ogl_tex_update(&gs.g_backbuffer, (u8*)gs.pixels, gs.screen_dim.x, gs.screen_dim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){});
 
     /////////////////////////////////////////////////////
     // 2.4 Render the software rendered texture
     /////////////////////////////////////////////////////
-    ogl_tex_update(&gs.g_backbuffer, (u8*)gs.pixels, gs.screen_dim.x, gs.screen_dim.y, OGL_TEX_FORMAT_RGBA8U, (Ogl_Tex_Params){.wrap_s = OGL_TEX_WRAP_MODE_REPEAT});
     R2D_Cmd cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_VIEWPORT, .r = gs.game_viewport };
     r2d_push_cmd(gs.frame_arena, &gs.cmd_list, cmd, 256);
     cmd = (R2D_Cmd){ .kind = R2D_CMD_KIND_SET_SCISSOR, .r = gs.game_viewport };
@@ -278,7 +277,7 @@ int main(void) {
     R2D_Quad quad = (R2D_Quad) {
         .src_rect = rec(0,0,gs.screen_dim.x,gs.screen_dim.y),
         .dst_rect = rec(0,0,gs.screen_dim.x,gs.screen_dim.y),
-        .c = col(1,1,1,0.5),
+        .c = col(1,1,1,0.3),
         .tex = gs.g_backbuffer,
         .rot_deg = 0,
     };

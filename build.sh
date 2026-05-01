@@ -64,7 +64,7 @@ CLIBS="-lX11 -lGL -lGLEW -lXrandr -lm -lgame"
 
 DEBUG_FLAGS="-O0 -g"
 RELEASE_FLAGS="-O2"
-INCLUDE_DIRS="-Iext -I$ENGINE_DIR/src"
+INCLUDE_DIRS="-Iext -I$ENGINE_DIR/frz -I$ENGINE_DIR/src"
 
 $CC $CFLAGS $DEBUG_FLAGS $INCLUDE_DIRS -fPIC -shared -lm \
 "$GAME_DIR"/*.c \
