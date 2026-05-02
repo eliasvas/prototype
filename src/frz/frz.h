@@ -6,6 +6,13 @@
 /////////////////////////////////////////////
 #include "base/base_inc.h"
 
+////////////////////////////////////////////////
+// Good References:
+// https://immersivemath.com/ila/index.html
+// https://foundationsofgameenginedev.com
+// https://haqr.eu/tinyrenderer
+////////////////////////////////////////////////
+
 // TODO: Make this proper single header lib
 // TODO: Multithreading
 // TODO: Options for face removal / and stuff
@@ -45,19 +52,18 @@ static void frz_clear() {
       //ctx->backbuffer[x + y * (s32)ctx->dim.x] = (0xff << 24) | (0x00 << 16) | (0x00 << 8) | (0x00 << 0);
     }
   }
-
-  ctx->backbuffer[100 + 800* 100] = (0xff << 24) | (0xff << 16) | (0xff << 8) | (0xff << 0);
 }
 
 static void frz_imm_px(s32 x, s32 y, color c) {
   FRZ_Ctx *ctx = frz_get_gctx();
-
-  //ctx->backbuffer[x + y * (s32)ctx->dim.x] = ((u8)(c.a*255.0) << 24) | ((u8)(c.b*255.0) << 16) | ((u8)(c.g*255.0) << 8) | ((u8)(c.r*255.0) << 0);
-  ctx->backbuffer[x + y * (s32)ctx->dim.x] = 0xffffffff;
+  if (x>=0 && x < ctx->dim.x && y >= 0 && y < ctx->dim.y) {
+    ctx->backbuffer[x + y * (s32)ctx->dim.x] = 0xffffffff;
+  }
 }
 
 #define SWAP(T, a, b) do { T temp = a; a = b; b = temp; }while(0);
-static void frz_imm_line(v2 start, v2 end, color c) {
+
+static void frz_imm_linex(v2 start, v2 end, color c) {
   if (start.x > end.x) {
     SWAP(v2, start, end);
   }
@@ -66,11 +72,34 @@ static void frz_imm_line(v2 start, v2 end, color c) {
   for (s32 x = start.x; x <= end.x; x+=1) {
     f32 perc = (x - start.x) / (end.x - start.x);
     f32 y = start.y + (end.y - start.y) * perc;
-    //printf("x: %d, y: %f\n", x, y);
     frz_imm_px(x, (s32)y, c);
   }
 }
 
+static void frz_imm_liney(v2 start, v2 end, color c) {
+  if (start.y > end.y) {
+    SWAP(v2, start, end);
+  }
+
+  f32 slope = (end.x - start.x) / (end.y - start.y);
+  for (s32 y = start.y; y <= end.y; y+=1) {
+    f32 perc = (y - start.y) / (end.y- start.y);
+    f32 x = start.x + (end.x - start.x) * perc;
+    frz_imm_px(x, (s32)y, c);
+  }
+}
+
+static void frz_imm_line(v2 start, v2 end, color c) {
+  if (end.x == start.x || end.y == start.y) return;
+
+  f32 slopex = (end.y - start.y) / (end.x - start.x);
+  f32 slopey = (end.x - start.x) / (end.y - start.y);
+  if (slopex < slopey) {
+    frz_imm_linex(start, end, c);
+  }else {
+    frz_imm_liney(start, end, c);
+  }
+}
 
 
 #endif
